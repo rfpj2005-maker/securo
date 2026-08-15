@@ -36,6 +36,11 @@ dependencies = [
     # agents feature pay zero cost (the package is installed but never
     # imported).
     "fastembed>=0.4.0",
+    # Local speech-to-text for meeting recordings (app/tasks/meeting_tasks.py).
+    # Runs entirely inside the celery worker on CPU — no external API, no
+    # audio ever leaves the server. Model weights (~500MB for "small")
+    # download once on first use to meetings_whisper_model_path.
+    "faster-whisper>=1.0.0",
 ]
 
 [project.optional-dependencies]

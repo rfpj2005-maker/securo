@@ -120,6 +120,31 @@ class Settings(BaseSettings):
     # external dependency on the Brazilian government endpoint).
     tesouro_direto_enabled: bool = True
 
+    # Siprov API (Amparar Benefícios management system) — used by the
+    # "siprov_*" agent tools. Dedicated "Tipo de Usuário = API" account.
+    siprov_api_email: str = ""
+    siprov_api_password: SecretStr = SecretStr("")
+
+    # Google Calendar OAuth2 (view/create/edit events from Securo).
+    # Create at console.cloud.google.com: enable the Calendar API, configure
+    # the OAuth consent screen, then create a Web application OAuth client
+    # with redirect URI {FRONTEND_URL}/api/integrations/google-calendar/callback.
+    google_oauth_client_id: str = ""
+    google_oauth_client_secret: SecretStr = SecretStr("")
+
+    # Meeting recordings — audio stored on disk, transcribed locally by
+    # faster-whisper in the celery worker (no external API, audio never
+    # leaves the server), then summarized/action-items extracted using the
+    # user's default agents LLM connection. Model weights download once on
+    # first use to meetings_whisper_model_path (~500MB for "small").
+    meetings_audio_storage_path: str = "./data/meeting_audio"
+    meetings_audio_max_size_mb: int = 500
+    meetings_audio_allowed_extensions: str = "webm,wav,mp3,m4a,ogg,opus,mp4,mpeg"
+    meetings_whisper_model: str = "small"
+    meetings_whisper_device: str = "cpu"
+    meetings_whisper_compute_type: str = "int8"
+    meetings_whisper_model_path: str = "./data/whisper_models"
+
     # The CWD-relative ".env" is kept for backward compatibility; the anchored
     # backend/.env guarantees the API and the Celery worker/beat resolve the
     # same file no matter which working directory each service is launched

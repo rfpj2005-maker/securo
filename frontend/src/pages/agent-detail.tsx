@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +14,31 @@ import { KnowledgeSection } from '@/components/agents/knowledge-section'
 import { ToolsSection } from '@/components/agents/tools-section'
 import { useWorkspace } from '@/contexts/workspace-context'
 
+// Remembers the last-active conversation per agent, the same way the
+// global chat panel does. Without this, navigating away from this page
+// (a normal sidebar click) unmounts it and loses the in-memory
+// conversationId — coming back lands on a blank "new conversation" even
+// though the real thread (and everything the agent did while you were
+// away) is still saved server-side under its id.
+const CONVERSATION_STORAGE_PREFIX = 'securo.agent-chat.'
+
+function readLastConversation(agentId: string): string | null {
+  try {
+    return localStorage.getItem(CONVERSATION_STORAGE_PREFIX + agentId)
+  } catch {
+    return null
+  }
+}
+
+function writeLastConversation(agentId: string, conversationId: string | null) {
+  try {
+    if (conversationId) localStorage.setItem(CONVERSATION_STORAGE_PREFIX + agentId, conversationId)
+    else localStorage.removeItem(CONVERSATION_STORAGE_PREFIX + agentId)
+  } catch {
+    // localStorage can be disabled (private mode, quota) — silent fallback.
+  }
+}
+
 export default function AgentDetailPage() {
   const { t } = useTranslation()
   const { id = '' } = useParams<{ id: string }>()
@@ -21,15 +46,25 @@ export default function AgentDetailPage() {
   const qc = useQueryClient()
   const { canWrite } = useWorkspace()
   const [editOpen, setEditOpen] = useState(false)
-  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [conversationId, setConversationIdState] = useState<string | null>(() => readLastConversation(id))
   // Increments on every sidebar click so the chat input refocuses even
   // when the conversation id didn't actually change (e.g. clicking "+"
   // while already on a null conversation).
   const [focusSignal, setFocusSignal] = useState(0)
-  const pickConversation = (id: string | null) => {
-    setConversationId(id)
+  const pickConversation = (cid: string | null) => {
+    setConversationIdState(cid)
+    writeLastConversation(id, cid)
     setFocusSignal((n) => n + 1)
   }
+  // The lazy useState initializer above only runs on the very first mount.
+  // Navigating between two different agents' dedicated pages reuses this
+  // same component (same route, new :id param) rather than remounting it,
+  // so re-sync whenever the agent actually changes.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConversationIdState(readLastConversation(id))
+    setFocusSignal((n) => n + 1)
+  }, [id])
 
   const { data: info } = useQuery({ queryKey: ['agents-info'], queryFn: () => agents.info() })
   const { data: agent, isLoading } = useQuery({
@@ -163,7 +198,8 @@ export default function AgentDetailPage() {
               conversationId={conversationId}
               focusSignal={focusSignal}
               onConversationCreated={(cid) => {
-                setConversationId(cid)
+                setConversationIdState(cid)
+                writeLastConversation(id, cid)
                 qc.invalidateQueries({ queryKey: ['agent-conversations', id] })
               }}
             />

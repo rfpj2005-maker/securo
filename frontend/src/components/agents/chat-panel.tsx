@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ShellLogo } from '@/components/shell-logo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Send, Sparkles, AlertCircle } from 'lucide-react'
+import { Loader2, Send, Sparkles, AlertCircle, Mic, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { agents } from '@/lib/api'
 import type { Agent, AgentMessage } from '@/lib/api'
@@ -10,6 +10,7 @@ import { streamChat, type AgentStreamEvent } from '@/lib/agents-stream'
 import { Markdown } from '@/components/agents/markdown'
 import { ToolDebugChip } from '@/components/agents/tool-debug-chip'
 import { ProposalCard, isProposalData, isProposalToolName } from '@/components/agents/proposal-card'
+import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
 
 interface Props {
   agent: Agent
@@ -47,6 +48,7 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
   const [lastError, setLastError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const speech = useSpeechRecognition('pt-BR')
   // Whether the user is "pinned" to the bottom of the scroll area. We
   // only auto-scroll while pinned — if the user scrolls up to read,
   // streaming deltas no longer yank them back down.
@@ -86,6 +88,13 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
+
+  // Mirror the live transcript into the input while listening, so the
+  // user sees their words appear as they speak. They can still edit
+  // before sending — recognition never auto-sends.
+  useEffect(() => {
+    if (speech.listening) setInput(speech.transcript)
+  }, [speech.transcript, speech.listening])
 
   // Reset the textarea's inline height when the input is cleared (after
   // send, on conversation change, etc.) — onChange's auto-grow leaves
@@ -322,6 +331,18 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
             }
           }}
         />
+        {speech.supported && (
+          <Button
+            type="button"
+            variant={speech.listening ? 'destructive' : 'outline'}
+            onClick={() => (speech.listening ? speech.stop() : speech.start())}
+            disabled={streaming}
+            className="shrink-0"
+            aria-label={speech.listening ? t('agents.chat.voiceStop') : t('agents.chat.voiceStart')}
+          >
+            {speech.listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </Button>
+        )}
         <Button onClick={send} disabled={streaming || !input.trim()} className="shrink-0">
           {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>

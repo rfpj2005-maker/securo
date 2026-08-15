@@ -34,6 +34,8 @@ from app.models.import_log import ImportLog
 from app.models.payee import Payee, PayeeMapping
 from app.models.recurring_transaction import RecurringTransaction
 from app.models.rule import Rule
+from app.models.subtask import Subtask
+from app.models.task import Task
 from app.models.transaction import Transaction
 from app.models.transaction_attachment import TransactionAttachment
 from app.models.transaction_split import TransactionSplit
@@ -59,6 +61,8 @@ _AUTOSTAMP_MODELS = (
     PayeeMapping,
     RecurringTransaction,
     Rule,
+    Subtask,
+    Task,
     Transaction,
     TransactionAttachment,
     TransactionSplit,
@@ -107,6 +111,7 @@ _PARENT_LOOKUPS: tuple[tuple[str, str], ...] = (
     ("asset_id", "app.models.asset:Asset"),
     ("group_id", "app.models.group:Group"),
     ("transaction_id", "app.models.transaction:Transaction"),
+    ("task_id", "app.models.task:Task"),
     ("agent_id", "app.agents.models.agent:Agent"),
 )
 

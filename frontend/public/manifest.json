@@ -1,0 +1,39 @@
+{
+  "name": "Securo",
+  "short_name": "Securo",
+  "description": "Gerenciador financeiro pessoal — Securo",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8F9FB",
+  "theme_color": "#6366F1",
+  "icons": [
+    {
+      "src": "/android-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova tarefa por voz",
+      "short_name": "Ditar tarefa",
+      "url": "/tasks/voice",
+      "icons": [{ "src": "/android-icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tarefas",
+      "short_name": "Tarefas",
+      "url": "/tasks",
+      "icons": [{ "src": "/android-icon-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -134,7 +134,8 @@ export function BankConnectDialog({
       updateItem={updateItemId}
       onSuccess={handleSuccess}
       onClose={handleClose}
-      onError={() => {
+      onError={(error) => {
+        console.error('Pluggy Connect error:', error)
         toast.error(t('accounts.connectError'))
         handleClose()
       }}

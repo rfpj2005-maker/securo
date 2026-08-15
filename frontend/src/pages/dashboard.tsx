@@ -36,7 +36,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { CheckCircle2, CalendarIcon, Paperclip, Target, ArrowUpDown, HelpCircle, EyeClosed } from 'lucide-react'
+import { CheckCircle2, CalendarIcon, Paperclip, Target, ArrowUpDown, HelpCircle, EyeClosed, AlertTriangle, Lightbulb, TrendingUp, TrendingDown } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ICON_MAP } from '@/lib/category-icons'
 import { PageHeader } from '@/components/page-header'
@@ -245,6 +245,100 @@ export default function DashboardPage() {
     queryKey: ['goals', 'summary'],
     queryFn: () => goalsApi.summary(3),
   })
+
+  // Lightweight, rule-based suggestions computed entirely from data already
+  // on this page — no extra API calls. Ranked high → low so the most
+  // urgent thing (overspending, negative balance) surfaces first.
+  type Suggestion = {
+    id: string
+    severity: 'high' | 'medium' | 'low'
+    icon: typeof AlertTriangle
+    title: string
+    description: string
+    to?: string
+  }
+  const suggestions = useMemo<Suggestion[]>(() => {
+    const items: Suggestion[] = []
+    if (!summary) return items
+
+    if (summary.monthly_income > 0 && summary.monthly_expenses > summary.monthly_income) {
+      const overBy = summary.monthly_expenses - summary.monthly_income
+      items.push({
+        id: 'expenses-over-income',
+        severity: 'high',
+        icon: TrendingDown,
+        title: t('dashboard.suggestions.expensesOverIncomeTitle'),
+        description: t('dashboard.suggestions.expensesOverIncomeDesc', { amount: mask(formatCurrency(overBy, userCurrency, locale)) }),
+        to: '/reports',
+      })
+    }
+
+    for (const acc of accountsList ?? []) {
+      if (!acc.is_closed && acc.current_balance < 0 && acc.type !== 'credit_card') {
+        items.push({
+          id: `negative-balance-${acc.id}`,
+          severity: 'high',
+          icon: AlertTriangle,
+          title: t('dashboard.suggestions.negativeBalanceTitle'),
+          description: t('dashboard.suggestions.negativeBalanceDesc', {
+            account: getAccountName(acc),
+            amount: mask(formatCurrency(acc.current_balance, acc.currency, locale)),
+          }),
+          to: `/accounts/${acc.id}`,
+        })
+      }
+    }
+
+    if (summary.pending_categorization > 0) {
+      items.push({
+        id: 'pending-categorization',
+        severity: 'medium',
+        icon: Lightbulb,
+        title: t('dashboard.suggestions.pendingCategorizationTitle', { count: summary.pending_categorization }),
+        description: t('dashboard.suggestions.pendingCategorizationDesc', { amount: mask(formatCurrency(summary.pending_categorization_amount, userCurrency, locale)) }),
+        to: '/transactions?uncategorized=true',
+      })
+    }
+
+    for (const b of budgetComparison ?? []) {
+      if (b.budget_amount && b.percentage_used != null && b.percentage_used > 100) {
+        items.push({
+          id: `budget-over-${b.category_id}`,
+          severity: b.percentage_used > 150 ? 'high' : 'medium',
+          icon: TrendingUp,
+          title: t('dashboard.suggestions.budgetOverTitle', { category: b.category_name }),
+          description: t('dashboard.suggestions.budgetOverDesc', { pct: Math.round(b.percentage_used) }),
+          to: '/budgets',
+        })
+      } else if (b.budget_amount && b.prev_month_amount > 0 && b.actual_amount > b.prev_month_amount * 1.3) {
+        const pct = Math.round(((b.actual_amount - b.prev_month_amount) / b.prev_month_amount) * 100)
+        items.push({
+          id: `spend-spike-${b.category_id}`,
+          severity: 'low',
+          icon: TrendingUp,
+          title: t('dashboard.suggestions.spendSpikeTitle', { category: b.category_name }),
+          description: t('dashboard.suggestions.spendSpikeDesc', { pct }),
+          to: '/reports',
+        })
+      }
+    }
+
+    for (const g of goalsSummary ?? []) {
+      if (g.on_track === 'behind' || g.on_track === 'overdue') {
+        items.push({
+          id: `goal-${g.id}`,
+          severity: g.on_track === 'overdue' ? 'high' : 'low',
+          icon: Target,
+          title: t('dashboard.suggestions.goalBehindTitle', { goal: g.name }),
+          description: t('dashboard.suggestions.goalBehindDesc'),
+          to: '/goals',
+        })
+      }
+    }
+
+    const order = { high: 0, medium: 1, low: 2 }
+    return items.sort((a, b) => order[a.severity] - order[b.severity]).slice(0, 5)
+  }, [summary, accountsList, budgetComparison, goalsSummary, userCurrency, locale, mask, t])
 
   const updateMutation = useMutation({
     mutationFn: ({ id, ...data }: Partial<Transaction> & { id: string }) =>
@@ -962,6 +1056,39 @@ export default function DashboardPage() {
           })()}
         </div>
       </div>
+
+      {/* Financial control suggestions — rule-based, computed from data already on this page */}
+      {suggestions.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm mb-5">
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <Lightbulb size={15} className="text-amber-500" />
+            <p className="text-sm font-semibold text-foreground">{t('dashboard.suggestions.title')}</p>
+          </div>
+          <div className="divide-y divide-border">
+            {suggestions.map((s) => {
+              const severityColor = s.severity === 'high' ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/30' : s.severity === 'medium' ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/30' : 'text-blue-600 bg-blue-50 dark:bg-blue-950/30'
+              const Content = (
+                <div className="px-5 py-3 flex items-start gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${severityColor}`}>
+                    <s.icon size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{s.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
+                  </div>
+                </div>
+              )
+              return s.to ? (
+                <Link key={s.id} to={s.to} className="block hover:bg-muted/40 transition-colors">
+                  {Content}
+                </Link>
+              ) : (
+                <div key={s.id}>{Content}</div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Goals Progress Widget */}
       {goalsSummary && goalsSummary.length > 0 && (

@@ -1,7 +1,7 @@
 """add tasks table
 
-Revision ID: 066
-Revises: 065
+Revision ID: 070
+Revises: 069
 Create Date: 2026-08-06
 
 Simple to-do list feature: title, category (marketing, management,
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "066"
-down_revision: Union[str, None] = "065"
+revision: str = "070"
+down_revision: Union[str, None] = "069"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

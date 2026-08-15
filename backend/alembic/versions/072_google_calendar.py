@@ -1,7 +1,7 @@
 """add google_calendar_connections table
 
-Revision ID: 068
-Revises: 067
+Revision ID: 072
+Revises: 071
 Create Date: 2026-08-14
 
 Stores the OAuth2 tokens for a user's linked Google account, so Securo can
@@ -14,8 +14,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "068"
-down_revision: Union[str, None] = "067"
+revision: str = "072"
+down_revision: Union[str, None] = "071"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

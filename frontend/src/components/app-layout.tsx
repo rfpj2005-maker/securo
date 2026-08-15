@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { getAccountName } from '@/lib/account-utils'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -6,6 +6,7 @@ import { useDisplayLocale } from '@/hooks/use-display-locale'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
+import { useWorkspace } from '@/contexts/workspace-context'
 import { CollectionSelector } from '@/components/collection-selector'
 import { auth as authApi, backup as backupApi, admin as adminApi } from '@/lib/api'
 import { resolveSupportedLang } from '@/lib/i18n'
@@ -33,25 +34,14 @@ import { ShellLogo } from '@/components/shell-logo'
 import { UpdateAvailableBanner } from '@/components/update-available-banner'
 import { UpdateAvailableDialog } from '@/components/update-available-dialog'
 import { WorkspaceSwitcher } from '@/components/workspace-switcher'
+import { navItems, visibleNavItems, type NavItem } from '@/lib/nav-items'
 import {
-  ArrowLeftRight,
-  Building2,
-  SlidersHorizontal,
-  Upload,
   Menu,
   ChevronRight,
-  Tag,
-  PiggyBank,
-  Target,
   Eye,
   EyeOff,
-  Repeat,
-  Landmark,
-  Users,
-  Split,
   ListChecks,
   Car,
-  BarChart3,
   Sun,
   Moon,
   Languages,
@@ -61,7 +51,6 @@ import {
   Shield,
   ShieldCheck,
   Fingerprint,
-  Wallet,
   CalendarDays,
   Mic,
 } from 'lucide-react'
@@ -75,45 +64,35 @@ import { GlobalChatPanel } from '@/components/global-chat-panel'
 import { useFeatureFlags } from '@/hooks/use-feature-flags'
 import { Bot, Search, Sparkles } from 'lucide-react'
 import { setThemeBasedOnSystem } from '@/lib/theme-utils'
+import { formatCurrency } from '@/lib/format'
 
-type NavItem =
-  | { type: 'link'; key: string; path: string; icon: React.ElementType }
-  | { type: 'separator'; labelKey: string }
-  | { type: 'group'; key: string; icon: React.ElementType; items: { key: string; path: string; icon: React.ElementType }[] }
-
-const navItems: NavItem[] = [
-  // The dashboard ("Painel") is now reachable by clicking the Securo
-  // logo + name in the sidebar header — no dedicated menu item to keep
-  // the sidebar focused on the main destinations. Everything money-related
-  // (transactions, accounts, budgets, reports, etc.) lives under one
-  // collapsible "Finanças" group instead of a dozen flat top-level icons.
-  {
-    type: 'group',
-    key: 'finances',
-    icon: Wallet,
-    items: [
-      { key: 'transactions', path: '/transactions', icon: ArrowLeftRight },
-      { key: 'accounts', path: '/accounts', icon: Building2 },
-      { key: 'import', path: '/import', icon: Upload },
-      { key: 'reports', path: '/reports', icon: BarChart3 },
-      { key: 'assets', path: '/assets', icon: Landmark },
-      { key: 'budgets', path: '/budgets', icon: PiggyBank },
-      { key: 'goals', path: '/goals', icon: Target },
-      { key: 'recurring', path: '/recurring', icon: Repeat },
-      { key: 'categories', path: '/categories', icon: Tag },
-      { key: 'payees', path: '/payees', icon: Users },
-      { key: 'splitGroups', path: '/groups', icon: Split },
-      { key: 'rules', path: '/rules', icon: SlidersHorizontal },
-    ],
-  },
-  { type: 'link', key: 'tasks', path: '/tasks', icon: ListChecks },
-  { type: 'link', key: 'calendar', path: '/calendar', icon: CalendarDays },
-  { type: 'link', key: 'meetings', path: '/meetings', icon: Mic },
+// Securo's own always-on destinations — not part of the workspace module
+// system (which only gates the upstream finance modules), so they're
+// appended unconditionally after the module-gated list below.
+const CUSTOM_NAV_ITEMS: { key: string; path: string; icon: React.ElementType }[] = [
+  { key: 'tasks', path: '/tasks', icon: ListChecks },
+  { key: 'calendar', path: '/calendar', icon: CalendarDays },
+  { key: 'meetings', path: '/meetings', icon: Mic },
 ]
 
-function formatCurrency(value: number, currency = 'USD', locale = 'en-US') {
-  return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(
-    value,
+/** Placeholder rows shown while the workspace's module list is in flight. */
+function NavSkeleton() {
+  return (
+    <div className="flex flex-col gap-0.5" aria-hidden>
+      {[3, 2, 7].map((count, section) => (
+        <div key={section} className={cn('flex flex-col gap-0.5', section > 0 && 'pt-3')}>
+          <div className="px-3 pt-1 pb-1">
+            <div className="h-2 w-16 rounded bg-sidebar-accent/60 animate-pulse" />
+          </div>
+          {Array.from({ length: count }).map((_, row) => (
+            <div key={row} className="flex items-center gap-3 px-3 py-2">
+              <div className="h-4 w-4 rounded bg-sidebar-accent/60 animate-pulse" />
+              <div className="h-3 flex-1 max-w-[7rem] rounded bg-sidebar-accent/40 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -126,7 +105,6 @@ export function AppLayout() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [financesExpanded, setFinancesExpanded] = useState(true)
   const [accountsExpanded, setAccountsExpanded] = useState(true)
   const [accountsShowAll, setAccountsShowAll] = useState(false)
   const { privacyMode, togglePrivacyMode, mask } = usePrivacyMode()
@@ -139,6 +117,7 @@ export function AppLayout() {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
   useCommandPaletteHotkey(setPaletteOpen)
   const { agentsEnabled } = useFeatureFlags()
+  const { hasModule, isLoading: workspaceLoading } = useWorkspace()
 
   // ⌘J / Ctrl+J toggles the global slide-over chat from anywhere.
   // Distinct from ⌘K (command palette) so users can have both open.
@@ -163,11 +142,11 @@ export function AppLayout() {
   // The "Agents" management page used to live in the sidebar, but it's
   // a configuration surface (KB upload, providers, default selection),
   // not a daily destination. Moved to the user menu (Change password,
-  // 2FA, Backups, AI agents). The Siprov agent chat itself IS a daily
-  // destination, so it gets its own direct link when agents are on.
-  const finalNavItems: NavItem[] = agentsEnabled
-    ? [...navItems, { type: 'link', key: 'siprov', path: '/agents/067f6fdb-f660-4579-913b-1f80c6a22e30', icon: Car }]
-    : navItems
+  // 2FA, Backups, AI agents).
+  const finalNavItems: NavItem[] = useMemo(
+    () => visibleNavItems(navItems, hasModule),
+    [hasModule],
+  )
   const isMac =
     typeof navigator !== 'undefined' &&
     /Mac|iPhone|iPad|iPod/.test(navigator.platform)
@@ -393,7 +372,11 @@ export function AppLayout() {
           <div className="flex-1 min-h-0 overflow-y-auto">
           {/* Nav */}
           <nav className="flex flex-col gap-0.5 px-3 pt-1 pb-3" data-tour="sidebar">
-            {finalNavItems.map((item, idx) => {
+            {/* Which modules this workspace shows is resolved server-side,
+                so until the workspace list lands there is no honest answer
+                — a placeholder beats both an empty sidebar and a guess. */}
+            {workspaceLoading && <NavSkeleton />}
+            {!workspaceLoading && finalNavItems.map((item, idx) => {
               if (item.type === 'separator') {
                 // The first separator sits right below the search bar
                 // — without trimming the top padding it leaves a wide
@@ -409,70 +392,45 @@ export function AppLayout() {
                 )
               }
 
-              if (item.type === 'group') {
-                const GroupIcon = item.icon
-                const groupActive = location.pathname === '/' || item.items.some((c) => location.pathname.startsWith(c.path))
-                return (
-                  <div key={item.key}>
-                    <div
-                      className={cn(
-                        'flex w-full items-center gap-1 text-[13px] font-medium transition-all rounded-lg pr-1',
-                        groupActive && !financesExpanded
-                          ? 'bg-primary/[0.08] text-primary'
-                          : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                      )}
-                    >
-                      <Link
-                        to="/"
-                        data-tour={`nav-${item.key}`}
-                        onClick={() => setSidebarOpen(false)}
-                        className="flex flex-1 items-center gap-3 px-3 py-2 min-w-0"
-                      >
-                        <GroupIcon size={17} className={cn('shrink-0', groupActive && !financesExpanded ? 'text-primary' : 'text-sidebar-muted')} />
-                        <span className="flex-1 text-left">{t(`nav.${item.key}`)}</span>
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => setFinancesExpanded((v) => !v)}
-                        aria-label={financesExpanded ? t('common.collapse') : t('common.expand')}
-                        className="shrink-0 p-1.5 rounded-md hover:bg-sidebar-accent"
-                      >
-                        <ChevronRight size={13} className={cn('shrink-0 text-sidebar-muted transition-transform', financesExpanded && 'rotate-90')} />
-                      </button>
-                    </div>
-                    {financesExpanded && (
-                      <div className="mt-0.5 space-y-0.5">
-                        {item.items.map((child) => {
-                          const childActive = location.pathname.startsWith(child.path)
-                          const ChildIcon = child.icon
-                          return (
-                            <Link
-                              key={child.key}
-                              to={child.path}
-                              data-tour={`nav-${child.key}`}
-                              onClick={() => setSidebarOpen(false)}
-                              className={cn(
-                                'flex items-center gap-3 text-[13px] font-medium transition-all rounded-lg pl-8 pr-3 py-1.5',
-                                childActive
-                                  ? 'bg-primary/[0.08] text-primary border-l-[3px] border-primary pl-[29px]'
-                                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                              )}
-                            >
-                              <ChildIcon size={15} className={cn('shrink-0', childActive ? 'text-primary' : 'text-sidebar-muted')} />
-                              <span>{t(`nav.${child.key}`)}</span>
-                            </Link>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              }
-
               const isActive =
                 item.path === '/'
                   ? location.pathname === '/'
                   : location.pathname.startsWith(item.path)
+              const Icon = item.icon
+              return (
+                <Link
+                  key={item.key}
+                  to={item.path}
+                  data-tour={`nav-${item.key}`}
+                  onClick={() => setSidebarOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 text-[13px] font-medium transition-all rounded-lg px-3 py-2',
+                    isActive
+                      ? 'bg-primary/[0.08] text-primary border-l-[3px] border-primary pl-[9px]'
+                      : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                  )}
+                >
+                  <Icon
+                    size={17}
+                    className={cn(
+                      'shrink-0',
+                      isActive ? 'text-primary' : 'text-sidebar-muted',
+                    )}
+                  />
+                  <span>{t(`nav.${item.key}`)}</span>
+                </Link>
+              )
+            })}
+            {!workspaceLoading && [
+              ...CUSTOM_NAV_ITEMS,
+              // The Siprov agent chat is a daily destination when agents
+              // are on, so it gets its own direct link alongside Tasks/
+              // Calendar/Meetings rather than living only in the chat panel.
+              ...(agentsEnabled
+                ? [{ key: 'siprov', path: '/agents/067f6fdb-f660-4579-913b-1f80c6a22e30', icon: Car }]
+                : []),
+            ].map((item) => {
+              const isActive = location.pathname.startsWith(item.path)
               const Icon = item.icon
               return (
                 <Link
@@ -528,11 +486,7 @@ export function AppLayout() {
               {accountsExpanded && (
                 <div className="mt-1 space-y-0.5">
                   {[...visibleAccounts].sort((a, b) => Math.abs(Number(b.current_balance)) - Math.abs(Number(a.current_balance))).slice(0, accountsShowAll ? visibleAccounts.length : 3).map((acc) => {
-                    const balance = Number(acc.current_balance)
-                    const prevBalance = acc.previous_balance ?? 0
-                    const pctChange = prevBalance !== 0
-                      ? ((balance - prevBalance) / Math.abs(prevBalance)) * 100
-                      : null
+                    const balance = Number(acc.current_balance) || 0
                     const typeKey = acc.type.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase()).replace(/^./, c => c.toUpperCase())
 
                     return (
@@ -552,11 +506,6 @@ export function AppLayout() {
                           <span className={`block tabular-nums font-medium text-xs ${balance < 0 ? 'text-rose-400' : 'text-sidebar-foreground'}`}>
                             {mask(formatCurrency(balance, acc.currency, locale))}
                           </span>
-                          {pctChange !== null && (
-                            <span className={`block text-[10px] tabular-nums font-medium ${pctChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                              {mask(`${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(1)}%`)}
-                            </span>
-                          )}
                         </div>
                       </Link>
                     )

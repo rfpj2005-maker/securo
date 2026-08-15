@@ -40,6 +40,13 @@ import type {
   Attachment,
   Goal,
   GoalSummary,
+  Task,
+  Subtask,
+  Meeting,
+  MeetingListItem,
+  GoogleCalendarStatus,
+  GoogleCalendarInfo,
+  CalendarEvent,
   DashboardSummary,
   SpendingByCategory,
   MonthlyTrend,
@@ -954,6 +961,107 @@ export const goals = {
   summary: async (limit = 3): Promise<GoalSummary[]> => {
     const { data } = await api.get('/goals/summary', { params: { limit } })
     return data
+  },
+}
+
+// Google Calendar
+export const googleCalendar = {
+  status: async (): Promise<GoogleCalendarStatus> => {
+    const { data } = await api.get('/integrations/google-calendar/status')
+    return data
+  },
+  connect: async (): Promise<{ authorize_url: string }> => {
+    const { data } = await api.get('/integrations/google-calendar/connect')
+    return data
+  },
+  disconnect: async (): Promise<void> => {
+    await api.delete('/integrations/google-calendar')
+  },
+  calendars: async (): Promise<GoogleCalendarInfo[]> => {
+    const { data } = await api.get('/integrations/google-calendar/calendars')
+    return data
+  },
+  selectCalendar: async (calendarId: string): Promise<GoogleCalendarStatus> => {
+    const { data } = await api.post('/integrations/google-calendar/select', { calendar_id: calendarId })
+    return data
+  },
+  events: async (start?: string, end?: string): Promise<CalendarEvent[]> => {
+    const { data } = await api.get('/integrations/google-calendar/events', { params: { start, end } })
+    return data
+  },
+  createEvent: async (event: { summary: string; description?: string; location?: string; start: string; end: string; all_day?: boolean }): Promise<CalendarEvent> => {
+    const { data } = await api.post('/integrations/google-calendar/events', event)
+    return data
+  },
+  updateEvent: async (id: string, calendarId: string, event: Partial<{ summary: string; description: string; location: string; start: string; end: string; all_day: boolean }>): Promise<CalendarEvent> => {
+    const { data } = await api.patch(`/integrations/google-calendar/events/${id}`, event, { params: { calendar_id: calendarId } })
+    return data
+  },
+  deleteEvent: async (id: string, calendarId: string): Promise<void> => {
+    await api.delete(`/integrations/google-calendar/events/${id}`, { params: { calendar_id: calendarId } })
+  },
+}
+
+// Tasks
+export const tasks = {
+  list: async (params?: { category?: string; status?: string }): Promise<Task[]> => {
+    const { data } = await api.get('/tasks', { params })
+    return data
+  },
+  get: async (id: string): Promise<Task> => {
+    const { data } = await api.get(`/tasks/${id}`)
+    return data
+  },
+  create: async (task: { title: string; category?: string; due_date?: string | null; status?: string }): Promise<Task> => {
+    const { data } = await api.post('/tasks', task)
+    return data
+  },
+  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'status'>>): Promise<Task> => {
+    const { data } = await api.patch(`/tasks/${id}`, task)
+    return data
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/tasks/${id}`)
+  },
+  subtasks: {
+    create: async (taskId: string, title: string): Promise<Subtask> => {
+      const { data } = await api.post(`/tasks/${taskId}/subtasks`, { title })
+      return data
+    },
+    update: async (taskId: string, subtaskId: string, data: Partial<Pick<Subtask, 'title' | 'is_done' | 'position'>>): Promise<Subtask> => {
+      const { data: res } = await api.patch(`/tasks/${taskId}/subtasks/${subtaskId}`, data)
+      return res
+    },
+    delete: async (taskId: string, subtaskId: string): Promise<void> => {
+      await api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`)
+    },
+  },
+}
+
+// Meetings — record/upload, transcribe, summarize, auto-create tasks.
+export const meetings = {
+  list: async (): Promise<MeetingListItem[]> => {
+    const { data } = await api.get('/meetings')
+    return data
+  },
+  get: async (id: string): Promise<Meeting> => {
+    const { data } = await api.get(`/meetings/${id}`)
+    return data
+  },
+  upload: async (params: { title: string; meeting_type: 'in_person' | 'online'; file: File | Blob; filename?: string }): Promise<Meeting> => {
+    const formData = new FormData()
+    formData.append('title', params.title)
+    formData.append('meeting_type', params.meeting_type)
+    formData.append('file', params.file, params.filename ?? (params.file instanceof File ? params.file.name : 'recording.webm'))
+    const { data } = await api.post('/meetings', formData)
+    return data
+  },
+  retry: async (id: string): Promise<Meeting> => {
+    const { data } = await api.post(`/meetings/${id}/retry`)
+    return data
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/meetings/${id}`)
   },
 }
 

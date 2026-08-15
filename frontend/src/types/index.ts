@@ -702,6 +702,49 @@ export interface Goal {
   asset_group_name: string | null
 }
 
+export interface Subtask {
+  id: string
+  task_id: string
+  title: string
+  is_done: boolean
+  position: number
+  created_at: string
+}
+
+export interface Task {
+  id: string
+  user_id: string
+  title: string
+  category: string
+  due_date: string | null
+  status: 'pending' | 'completed'
+  source_meeting_id: string | null
+  created_at: string
+  updated_at: string
+  subtasks: Subtask[]
+}
+
+export type MeetingType = 'in_person' | 'online'
+export type MeetingStatus = 'pending' | 'transcribing' | 'summarizing' | 'completed' | 'failed'
+
+export interface MeetingListItem {
+  id: string
+  title: string
+  meeting_type: MeetingType
+  status: MeetingStatus
+  error: string | null
+  duration_seconds: number | null
+  summary: string | null
+  recorded_at: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Meeting extends MeetingListItem {
+  transcript: string | null
+  created_tasks: Task[]
+}
+
 export interface GoalSummary {
   id: string
   name: string
@@ -805,4 +848,29 @@ export interface ReportResponse {
   meta: ReportMeta
   composition: ReportCompositionItem[]
   category_trend: CategoryTrendItem[]
+}
+
+export interface GoogleCalendarStatus {
+  connected: boolean
+  google_email: string | null
+  selected_calendar_id: string | null
+}
+
+export interface GoogleCalendarInfo {
+  id: string
+  summary: string
+  primary: boolean
+}
+
+export interface CalendarEvent {
+  id: string
+  summary: string
+  description: string | null
+  location: string | null
+  start: string
+  end: string
+  all_day: boolean
+  html_link: string | null
+  calendar_id: string
+  calendar_summary: string | null
 }

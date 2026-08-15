@@ -28,6 +28,10 @@ const GoalsPage = lazy(() => import('@/pages/goals'))
 const AssetsPage = lazy(() => import('@/pages/assets'))
 const ReportsPage = lazy(() => import('@/pages/reports'))
 const PayeesPage = lazy(() => import('@/pages/payees'))
+const TasksPage = lazy(() => import('@/pages/tasks'))
+const VoiceTaskPage = lazy(() => import('@/pages/voice-task'))
+const CalendarPage = lazy(() => import('@/pages/calendar'))
+const MeetingsPage = lazy(() => import('@/pages/meetings'))
 const GroupsPage = lazy(() => import('@/pages/groups'))
 const GroupDetailPage = lazy(() => import('@/pages/group-detail'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/settings'))
@@ -93,6 +97,10 @@ function App() {
                   <Route path="/assets" element={<AssetsPage />} />
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/payees" element={<PayeesPage />} />
+                  <Route path="/tasks" element={<TasksPage />} />
+                  <Route path="/tasks/voice" element={<VoiceTaskPage />} />
+                  <Route path="/calendar" element={<CalendarPage />} />
+                  <Route path="/meetings" element={<MeetingsPage />} />
                   <Route path="/groups" element={<GroupsPage />} />
                   <Route path="/groups/:id" element={<GroupDetailPage />} />
                   <Route path="/workspace/settings" element={<WorkspaceSettingsPage />} />

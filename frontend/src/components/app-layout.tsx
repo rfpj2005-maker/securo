@@ -49,6 +49,8 @@ import {
   Landmark,
   Users,
   Split,
+  ListChecks,
+  Car,
   BarChart3,
   Sun,
   Moon,
@@ -59,6 +61,9 @@ import {
   Shield,
   ShieldCheck,
   Fingerprint,
+  Wallet,
+  CalendarDays,
+  Mic,
 } from 'lucide-react'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { ChangePasswordDialog } from '@/components/change-password-dialog'
@@ -74,27 +79,36 @@ import { setThemeBasedOnSystem } from '@/lib/theme-utils'
 type NavItem =
   | { type: 'link'; key: string; path: string; icon: React.ElementType }
   | { type: 'separator'; labelKey: string }
+  | { type: 'group'; key: string; icon: React.ElementType; items: { key: string; path: string; icon: React.ElementType }[] }
 
 const navItems: NavItem[] = [
   // The dashboard ("Painel") is now reachable by clicking the Securo
   // logo + name in the sidebar header — no dedicated menu item to keep
-  // the sidebar focused on the main destinations. Transactions sits
-  // inside the ACCOUNTS section since it's account-scoped data.
-  { type: 'separator', labelKey: 'nav.groupAccounts' },
-  { type: 'link', key: 'transactions', path: '/transactions', icon: ArrowLeftRight },
-  { type: 'link', key: 'accounts', path: '/accounts', icon: Building2 },
-  { type: 'link', key: 'import', path: '/import', icon: Upload },
-  { type: 'separator', labelKey: 'nav.groupAnalysis' },
-  { type: 'link', key: 'reports', path: '/reports', icon: BarChart3 },
-  { type: 'link', key: 'assets', path: '/assets', icon: Landmark },
-  { type: 'separator', labelKey: 'nav.groupSetup' },
-  { type: 'link', key: 'budgets', path: '/budgets', icon: PiggyBank },
-  { type: 'link', key: 'goals', path: '/goals', icon: Target },
-  { type: 'link', key: 'recurring', path: '/recurring', icon: Repeat },
-  { type: 'link', key: 'categories', path: '/categories', icon: Tag },
-  { type: 'link', key: 'payees', path: '/payees', icon: Users },
-  { type: 'link', key: 'splitGroups', path: '/groups', icon: Split },
-  { type: 'link', key: 'rules', path: '/rules', icon: SlidersHorizontal },
+  // the sidebar focused on the main destinations. Everything money-related
+  // (transactions, accounts, budgets, reports, etc.) lives under one
+  // collapsible "Finanças" group instead of a dozen flat top-level icons.
+  {
+    type: 'group',
+    key: 'finances',
+    icon: Wallet,
+    items: [
+      { key: 'transactions', path: '/transactions', icon: ArrowLeftRight },
+      { key: 'accounts', path: '/accounts', icon: Building2 },
+      { key: 'import', path: '/import', icon: Upload },
+      { key: 'reports', path: '/reports', icon: BarChart3 },
+      { key: 'assets', path: '/assets', icon: Landmark },
+      { key: 'budgets', path: '/budgets', icon: PiggyBank },
+      { key: 'goals', path: '/goals', icon: Target },
+      { key: 'recurring', path: '/recurring', icon: Repeat },
+      { key: 'categories', path: '/categories', icon: Tag },
+      { key: 'payees', path: '/payees', icon: Users },
+      { key: 'splitGroups', path: '/groups', icon: Split },
+      { key: 'rules', path: '/rules', icon: SlidersHorizontal },
+    ],
+  },
+  { type: 'link', key: 'tasks', path: '/tasks', icon: ListChecks },
+  { type: 'link', key: 'calendar', path: '/calendar', icon: CalendarDays },
+  { type: 'link', key: 'meetings', path: '/meetings', icon: Mic },
 ]
 
 function formatCurrency(value: number, currency = 'USD', locale = 'en-US') {
@@ -112,6 +126,7 @@ export function AppLayout() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [financesExpanded, setFinancesExpanded] = useState(true)
   const [accountsExpanded, setAccountsExpanded] = useState(true)
   const [accountsShowAll, setAccountsShowAll] = useState(false)
   const { privacyMode, togglePrivacyMode, mask } = usePrivacyMode()
@@ -148,8 +163,11 @@ export function AppLayout() {
   // The "Agents" management page used to live in the sidebar, but it's
   // a configuration surface (KB upload, providers, default selection),
   // not a daily destination. Moved to the user menu (Change password,
-  // 2FA, Backups, AI agents).
-  const finalNavItems: NavItem[] = navItems
+  // 2FA, Backups, AI agents). The Siprov agent chat itself IS a daily
+  // destination, so it gets its own direct link when agents are on.
+  const finalNavItems: NavItem[] = agentsEnabled
+    ? [...navItems, { type: 'link', key: 'siprov', path: '/agents/067f6fdb-f660-4579-913b-1f80c6a22e30', icon: Car }]
+    : navItems
   const isMac =
     typeof navigator !== 'undefined' &&
     /Mac|iPhone|iPad|iPod/.test(navigator.platform)
@@ -387,6 +405,66 @@ export function AppLayout() {
                     <span className="text-[10px] uppercase tracking-[0.12em] font-semibold text-sidebar-muted/50">
                       {t(item.labelKey)}
                     </span>
+                  </div>
+                )
+              }
+
+              if (item.type === 'group') {
+                const GroupIcon = item.icon
+                const groupActive = location.pathname === '/' || item.items.some((c) => location.pathname.startsWith(c.path))
+                return (
+                  <div key={item.key}>
+                    <div
+                      className={cn(
+                        'flex w-full items-center gap-1 text-[13px] font-medium transition-all rounded-lg pr-1',
+                        groupActive && !financesExpanded
+                          ? 'bg-primary/[0.08] text-primary'
+                          : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      )}
+                    >
+                      <Link
+                        to="/"
+                        data-tour={`nav-${item.key}`}
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex flex-1 items-center gap-3 px-3 py-2 min-w-0"
+                      >
+                        <GroupIcon size={17} className={cn('shrink-0', groupActive && !financesExpanded ? 'text-primary' : 'text-sidebar-muted')} />
+                        <span className="flex-1 text-left">{t(`nav.${item.key}`)}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setFinancesExpanded((v) => !v)}
+                        aria-label={financesExpanded ? t('common.collapse') : t('common.expand')}
+                        className="shrink-0 p-1.5 rounded-md hover:bg-sidebar-accent"
+                      >
+                        <ChevronRight size={13} className={cn('shrink-0 text-sidebar-muted transition-transform', financesExpanded && 'rotate-90')} />
+                      </button>
+                    </div>
+                    {financesExpanded && (
+                      <div className="mt-0.5 space-y-0.5">
+                        {item.items.map((child) => {
+                          const childActive = location.pathname.startsWith(child.path)
+                          const ChildIcon = child.icon
+                          return (
+                            <Link
+                              key={child.key}
+                              to={child.path}
+                              data-tour={`nav-${child.key}`}
+                              onClick={() => setSidebarOpen(false)}
+                              className={cn(
+                                'flex items-center gap-3 text-[13px] font-medium transition-all rounded-lg pl-8 pr-3 py-1.5',
+                                childActive
+                                  ? 'bg-primary/[0.08] text-primary border-l-[3px] border-primary pl-[29px]'
+                                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                              )}
+                            >
+                              <ChildIcon size={15} className={cn('shrink-0', childActive ? 'text-primary' : 'text-sidebar-muted')} />
+                              <span>{t(`nav.${child.key}`)}</span>
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               }

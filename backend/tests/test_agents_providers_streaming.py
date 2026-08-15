@@ -283,6 +283,47 @@ async def test_anthropic_includes_system_and_tools_in_payload():
     assert payload["tools"][0]["name"] == "t"
 
 
+@pytest.mark.asyncio
+async def test_anthropic_retries_without_temperature_on_deprecated_error():
+    # First attempt (with temperature) is rejected the way newer
+    # reasoning-tier Claude models do; second attempt (no temperature)
+    # succeeds. The provider should retry once, transparently.
+    _FakeAsyncClient.queue_stream.append(_FakeStreamResponse(
+        status_code=400,
+        lines=[],
+        body=json.dumps({"type": "error", "error": {
+            "type": "invalid_request_error",
+            "message": "`temperature` is deprecated for this model.",
+        }}).encode(),
+    ))
+    sse = [f"data: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}, 'usage': {}})}"]
+    _FakeAsyncClient.queue_stream.append(_FakeStreamResponse(status_code=200, lines=sse))
+
+    provider = AnthropicProvider(api_key="sk-test")
+    chunks = [c async for c in provider.chat_stream([ChatMessage(role="user", content="hi")], model="claude-x", temperature=0.3)]
+
+    assert any(c.type == "finish" for c in chunks)
+    assert len(_FakeAsyncClient.posted) == 2
+    assert _FakeAsyncClient.posted[0][1]["temperature"] == 0.3
+    assert "temperature" not in _FakeAsyncClient.posted[1][1]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_does_not_retry_unrelated_400_errors():
+    _FakeAsyncClient.queue_stream.append(_FakeStreamResponse(
+        status_code=400,
+        lines=[],
+        body=json.dumps({"type": "error", "error": {"type": "invalid_request_error", "message": "bad request"}}).encode(),
+    ))
+
+    provider = AnthropicProvider(api_key="sk-test")
+    with pytest.raises(LLMUnavailableError):
+        async for _ in provider.chat_stream([ChatMessage(role="user", content="hi")], model="claude-x"):
+            pass
+
+    assert len(_FakeAsyncClient.posted) == 1
+
+
 # --------------------------------------------------------------------- Anthropic: HTTP errors → typed exceptions
 
 @pytest.mark.asyncio

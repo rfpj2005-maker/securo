@@ -102,7 +102,6 @@ class AnthropicProvider(LLMProvider):
             "model": model,
             "messages": _serialize_messages(rest),
             "max_tokens": max_tokens or 4096,
-            "temperature": temperature,
             "stream": True,
         }
         if system:
@@ -110,6 +109,25 @@ class AnthropicProvider(LLMProvider):
         if tools:
             payload["tools"] = _serialize_tools(tools)
 
+        # Newer Claude models (e.g. reasoning-tier Sonnet 5) reject the
+        # `temperature` field outright with a 400 "deprecated for this
+        # model" instead of just ignoring an out-of-range value. Try with
+        # it first — most models still honor it — and drop it, retrying
+        # once, if that specific error comes back. Safe to retry: this
+        # error always arrives on the response headers before any SSE
+        # line is read, so nothing has been yielded yet.
+        try:
+            async for chunk in self._stream_once({**payload, "temperature": temperature}, url):
+                yield chunk
+            return
+        except LLMUnavailableError as exc:
+            if "temperature" not in str(exc) or "deprecated" not in str(exc):
+                raise
+
+        async for chunk in self._stream_once(payload, url):
+            yield chunk
+
+    async def _stream_once(self, payload: dict, url: str) -> AsyncIterator[ChatChunk]:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0)) as client:
                 async with client.stream("POST", url, json=payload, headers=self._headers()) as resp:

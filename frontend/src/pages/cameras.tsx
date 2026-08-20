@@ -156,7 +156,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
 
             {playing ? (
               <div className="space-y-2">
-                <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center isolate">
+                <div className="relative h-56 sm:h-72 rounded-lg overflow-hidden bg-black flex items-center justify-center isolate">
                   {videoLoading || !videoUrl ? (
                     <Skeleton className="w-full h-full rounded-none" />
                   ) : (
@@ -168,7 +168,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                 </Button>
               </div>
             ) : (
-              <div className="relative aspect-video rounded-lg overflow-hidden bg-muted flex items-center justify-center isolate">
+              <div className="relative h-56 sm:h-72 rounded-lg overflow-hidden bg-muted flex items-center justify-center isolate">
                 {url ? (
                   <img src={url} alt={camera.name} className="w-full h-full object-cover" />
                 ) : (

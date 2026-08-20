@@ -85,6 +85,26 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # touched. Flagged here so a future rate limit or admin floor is a
     # decision rather than an oversight.
     ("POST", "/api/fx-rates/refresh"): "refreshes instance-wide FX rates, no workspace data",
+    # Personal external-account connections (Gmail, generic IMAP, Google
+    # Calendar) and push subscriptions: each row is keyed by user_id, not
+    # workspace_id — same family as the LLM connections above. A read-only
+    # workspace viewer connecting their own mailbox/calendar/device writes
+    # nothing shared.
+    ("DELETE", "/api/integrations/gmail"): "the requester's own Gmail connection",
+    ("POST", "/api/integrations/gmail/drafts"): "drafts in the requester's own Gmail",
+    ("POST", "/api/integrations/gmail/send"): "sends from the requester's own Gmail",
+    ("POST", "/api/integrations/email"): "connects the requester's own IMAP mailbox",
+    ("DELETE", "/api/integrations/email"): "the requester's own IMAP mailbox connection",
+    ("POST", "/api/integrations/email/drafts"): "drafts in the requester's own mailbox",
+    ("POST", "/api/integrations/email/send"): "sends from the requester's own mailbox",
+    ("DELETE", "/api/integrations/google-calendar"): "the requester's own Google Calendar connection",
+    ("POST", "/api/integrations/google-calendar/select"): "picks which of the requester's own calendars to use",
+    ("POST", "/api/integrations/google-calendar/events"): "creates an event on the requester's own calendar",
+    ("PATCH", "/api/integrations/google-calendar/events/{event_id}"): "an event on the requester's own calendar",
+    ("DELETE", "/api/integrations/google-calendar/events/{event_id}"): "an event on the requester's own calendar",
+    ("POST", "/api/push/subscribe"): "the requester's own device's push subscription",
+    ("POST", "/api/push/unsubscribe"): "the requester's own device's push subscription",
+    ("POST", "/api/push/test"): "sends a test push to the requester's own device",
 }
 
 

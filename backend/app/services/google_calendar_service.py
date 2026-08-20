@@ -260,21 +260,26 @@ async def list_events(
     return events
 
 
-def _to_google_time(dt: datetime, all_day: bool) -> dict[str, str]:
+def _to_google_time(dt: datetime, all_day: bool, tz_name: str = "UTC") -> dict[str, str]:
     if all_day:
         return {"date": dt.date().isoformat()}
-    return {"dateTime": dt.isoformat()}
+    # The frontend sends a plain wall-clock time (a <input type="datetime-
+    # local"> value, no UTC offset) — Google rejects start/end.dateTime
+    # outright ("Missing time zone definition") unless it carries either an
+    # offset or an explicit timeZone. dt is naive here, so pair it with the
+    # user's own timezone rather than mislabeling it UTC.
+    return {"dateTime": dt.isoformat(), "timeZone": tz_name}
 
 
 async def create_event(
-    session: AsyncSession, conn: GoogleCalendarConnection, data: CalendarEventCreate
+    session: AsyncSession, conn: GoogleCalendarConnection, data: CalendarEventCreate, tz_name: str = "UTC"
 ) -> dict[str, Any]:
     body = {
         "summary": data.summary,
         "description": data.description,
         "location": data.location,
-        "start": _to_google_time(data.start, data.all_day),
-        "end": _to_google_time(data.end, data.all_day),
+        "start": _to_google_time(data.start, data.all_day, tz_name),
+        "end": _to_google_time(data.end, data.all_day, tz_name),
     }
     resp = await _calendar_request(
         session, conn, "POST", f"/calendars/{_cal_path(conn.selected_calendar_id)}/events", json=body
@@ -288,6 +293,7 @@ async def update_event(
     calendar_id: str,
     event_id: str,
     data: CalendarEventUpdate,
+    tz_name: str = "UTC",
 ) -> dict[str, Any]:
     body: dict[str, Any] = {}
     if data.summary is not None:
@@ -297,9 +303,9 @@ async def update_event(
     if data.location is not None:
         body["location"] = data.location
     if data.start is not None:
-        body["start"] = _to_google_time(data.start, bool(data.all_day))
+        body["start"] = _to_google_time(data.start, bool(data.all_day), tz_name)
     if data.end is not None:
-        body["end"] = _to_google_time(data.end, bool(data.all_day))
+        body["end"] = _to_google_time(data.end, bool(data.all_day), tz_name)
     resp = await _calendar_request(
         session, conn, "PATCH", f"/calendars/{_cal_path(calendar_id)}/events/{quote(event_id, safe='')}", json=body
     )

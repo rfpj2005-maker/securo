@@ -18,6 +18,13 @@ async def _require_connection(session: AsyncSession, ctx: CallContext):
     return conn
 
 
+async def _user_timezone(session: AsyncSession, ctx: CallContext) -> str:
+    from app.models.user import User
+
+    user = await session.get(User, ctx.user_id)
+    return ((user.preferences or {}) if user else {}).get("timezone") or "UTC"
+
+
 @tool(
     name="list_calendar_events",
     description="List the user's Google Calendar events in a date range, merged across all of their calendars. Defaults to the next 30 days. Each item includes calendar_id/calendar_summary — pass calendar_id back to update_calendar_event/delete_calendar_event.",
@@ -80,7 +87,7 @@ async def create_calendar_event(
         end=datetime.fromisoformat(end),
         all_day=all_day,
     )
-    return await gcal.create_event(session, conn, data)
+    return await gcal.create_event(session, conn, data, await _user_timezone(session, ctx))
 
 
 @tool(
@@ -125,7 +132,7 @@ async def update_calendar_event(
         end=datetime.fromisoformat(end) if end else None,
         all_day=all_day,
     )
-    return await gcal.update_event(session, conn, calendar_id, event_id, data)
+    return await gcal.update_event(session, conn, calendar_id, event_id, data, await _user_timezone(session, ctx))
 
 
 @tool(

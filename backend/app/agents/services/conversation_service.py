@@ -69,13 +69,38 @@ async def delete_conversation(
 async def list_messages(
     session: AsyncSession, conversation_id: uuid.UUID, limit: int = 200
 ) -> list[Message]:
+    """Returns the most recent `limit` messages, oldest first.
+
+    Ordering by ordinal ASC with a LIMIT would instead return the OLDEST
+    `limit` messages — for any conversation that outgrows the limit, the
+    LLM call in executor.py would silently build its context from stale
+    history missing the just-persisted new user message (and, depending on
+    where the cut fell, could hand Anthropic a message list that doesn't
+    end on a user turn, which the API rejects outright as "assistant
+    message prefill"). Fetch the tail in DESC order, then re-reverse to
+    chronological order for the caller.
+    """
     q = (
         select(Message)
         .where(Message.conversation_id == conversation_id)
-        .order_by(Message.ordinal.asc())
+        .order_by(Message.ordinal.desc())
         .limit(limit)
     )
-    return list((await session.execute(q)).scalars().all())
+    rows = list((await session.execute(q)).scalars().all())
+    rows.reverse()
+    # A hard cutoff at `limit` can land mid-turn — e.g. opening on a "tool"
+    # result whose matching assistant tool_use call fell just outside the
+    # window (or an assistant message that itself only makes sense after
+    # the tool_use/tool_result pair before it). Anthropic rejects a
+    # tool_result with no preceding tool_use in the same request. Trim
+    # forward to the next "user" message — always where a fresh turn
+    # starts (see executor.py's append_message call order) — so the
+    # window never opens mid-turn. The conversation's newest message is
+    # always role="user" (the one that triggered this call, persisted
+    # before history is loaded), so this can't trim the list to empty.
+    while rows and rows[0].role != "user":
+        rows.pop(0)
+    return rows
 
 
 async def append_message(

@@ -1,5 +1,5 @@
 import uuid
-from datetime import date as _Date, datetime
+from datetime import date as _Date, datetime, time as _Time
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -13,6 +13,7 @@ class TaskCreate(BaseModel):
     title: str = Field(..., max_length=255)
     category: str = Field("administrative", max_length=20)
     due_date: Optional[_Date] = None
+    due_time: Optional[_Time] = None
     status: str = "pending"
 
     @field_validator("category")
@@ -35,6 +36,7 @@ class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=255)
     category: Optional[str] = Field(None, max_length=20)
     due_date: Optional[_Date] = None
+    due_time: Optional[_Time] = None
     status: Optional[str] = None
 
     @field_validator("category")
@@ -61,6 +63,7 @@ class TaskRead(BaseModel):
     title: str
     category: str
     due_date: Optional[_Date] = None
+    due_time: Optional[_Time] = None
     status: str
     source_meeting_id: Optional[uuid.UUID] = None
     created_at: datetime

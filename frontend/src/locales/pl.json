@@ -116,9 +116,7 @@
     "splitGroups": "Grupy",
     "goals": "Cele",
     "reports": "Raporty",
-    "groupAnalysis": "Analiza",
-    "groupSetup": "Konfiguracja",
-    "groupAccounts": "Konta",
+    "finances": "Finanse",
     "groupAdmin": "Administracja",
     "groupAgents": "AI",
     "agents": "Agenci",
@@ -1748,6 +1746,7 @@
       "applyFailed": "Nie udało się zastosować",
       "showRaw": "Szczegóły narzędzia",
       "collision": "nazwa już używana przez {{name}}",
+      "sendConfirm": "Wysłać ten e-mail do {{to}} teraz? Tej operacji nie można cofnąć.",
       "kind": {
         "categorize": "Zmień kategorię transakcji",
         "create_category": "Utwórz kategorię",
@@ -1757,7 +1756,9 @@
         "create_recurring_transaction": "Dodaj transakcję cykliczną",
         "update_recurring_transaction": "Zaktualizuj transakcję cykliczną",
         "cancel_recurring_transaction": "Anuluj transakcję cykliczną",
-        "create_goal": "Utwórz cel"
+        "create_goal": "Utwórz cel",
+        "create_email_draft": "Utwórz szkic e-maila",
+        "send_email": "Wyślij e-mail"
       },
       "summary": {
         "categorize_one": "{{count}} transakcja → {{category}}",
@@ -1772,7 +1773,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Zatrzymaj przyszłe wystąpienia „{{description}}” (historia zachowana)",
         "deleteRecurring": "Trwale usuń „{{description}}”",
-        "createGoal": "„{{name}}” — cel {{target}}, termin {{deadline}}"
+        "createGoal": "„{{name}}” — cel {{target}}, termin {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: „{{subject}}”",
+        "sendEmail": "{{mailbox}} → {{to}}: „{{subject}}”"
       }
     },
     "conversation": {

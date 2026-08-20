@@ -117,9 +117,7 @@
     "splitGroups": "Группы",
     "goals": "Цели",
     "reports": "Отчёты",
-    "groupAnalysis": "Анализ",
-    "groupSetup": "Настройка",
-    "groupAccounts": "Счета",
+    "finances": "Финансы",
     "groupAdmin": "Администрирование",
     "groupAgents": "ИИ",
     "agents": "Агенты",
@@ -1676,6 +1674,7 @@
       "applyFailed": "Не удалось применить",
       "showRaw": "Детали инструмента",
       "collision": "имя уже используется {{name}}",
+      "sendConfirm": "Отправить это письмо {{to}} сейчас? Это действие нельзя отменить.",
       "kind": {
         "categorize": "Перекатегоризировать транзакции",
         "create_category": "Создать категорию",
@@ -1685,7 +1684,9 @@
         "create_recurring_transaction": "Добавить регулярную транзакцию",
         "update_recurring_transaction": "Обновить регулярную транзакцию",
         "cancel_recurring_transaction": "Отменить регулярную транзакцию",
-        "create_goal": "Создать цель"
+        "create_goal": "Создать цель",
+        "create_email_draft": "Создать черновик письма",
+        "send_email": "Отправить письмо"
       },
       "summary": {
         "categorize": "{{count}} транзакций → {{category}}",
@@ -1697,7 +1698,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Остановить будущие повторения «{{description}}» (история сохранена)",
         "deleteRecurring": "Навсегда удалить «{{description}}»",
-        "createGoal": "«{{name}}» — цель {{target}}, срок {{deadline}}"
+        "createGoal": "«{{name}}» — цель {{target}}, срок {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: «{{subject}}»",
+        "sendEmail": "{{mailbox}} → {{to}}: «{{subject}}»"
       }
     },
     "conversation": {

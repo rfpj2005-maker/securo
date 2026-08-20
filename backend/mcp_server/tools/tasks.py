@@ -8,7 +8,7 @@ from app.schemas.task import TaskCreate, TaskUpdate
 from app.services import subtask_service, task_service
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import parse_date, parse_uuid, resolve_workspace_id
+from mcp_server.tools._helpers import parse_date, parse_time, parse_uuid, resolve_workspace_id
 
 
 def _task_to_dict(t: Any) -> dict[str, Any]:
@@ -17,6 +17,7 @@ def _task_to_dict(t: Any) -> dict[str, Any]:
         "title": t.title,
         "category": t.category,
         "due_date": t.due_date.isoformat() if t.due_date else None,
+        "due_time": t.due_time.isoformat(timespec="minutes") if t.due_time else None,
         "status": t.status,
         "subtasks": [
             {"id": str(s.id), "title": s.title, "is_done": s.is_done} for s in t.subtasks
@@ -47,13 +48,18 @@ async def list_tasks(
 
 @tool(
     name="create_task",
-    description="Create a new to-do task for the user.",
+    description=(
+        "Create a new to-do task for the user. Pass due_time (in addition to due_date) when the "
+        "user gives a specific time — that's when their push reminder fires, if they've enabled "
+        "push notifications. Without due_time, the reminder falls back to a default morning hour."
+    ),
     parameters={
         "type": "object",
         "properties": {
             "title": {"type": "string"},
             "category": {"type": "string", "description": "Free text, e.g. 'marketing', 'administrative'. Defaults to 'administrative'."},
             "due_date": {"type": "string", "format": "date", "description": "YYYY-MM-DD, optional"},
+            "due_time": {"type": "string", "description": "HH:MM (24h), optional — when the reminder should fire"},
         },
         "required": ["title"],
         "additionalProperties": False,
@@ -61,17 +67,23 @@ async def list_tasks(
     tags=["write", "tasks"],
 )
 async def create_task(
-    *, session: AsyncSession, ctx: CallContext, title: str, category: str = "administrative", due_date: str | None = None
+    *,
+    session: AsyncSession,
+    ctx: CallContext,
+    title: str,
+    category: str = "administrative",
+    due_date: str | None = None,
+    due_time: str | None = None,
 ) -> dict[str, Any]:
     ws_id = await resolve_workspace_id(session, ctx)
-    data = TaskCreate(title=title, category=category, due_date=parse_date(due_date))
+    data = TaskCreate(title=title, category=category, due_date=parse_date(due_date), due_time=parse_time(due_time))
     t = await task_service.create_task(session, ws_id, ctx.user_id, data)
     return _task_to_dict(t)
 
 
 @tool(
     name="update_task",
-    description="Update a task's title, category, due date, and/or status (pending/completed).",
+    description="Update a task's title, category, due date/time, and/or status (pending/completed).",
     parameters={
         "type": "object",
         "properties": {
@@ -79,6 +91,7 @@ async def create_task(
             "title": {"type": "string"},
             "category": {"type": "string"},
             "due_date": {"type": "string", "format": "date"},
+            "due_time": {"type": "string", "description": "HH:MM (24h)"},
             "status": {"type": "string", "enum": ["pending", "completed"]},
         },
         "required": ["task_id"],
@@ -94,6 +107,7 @@ async def update_task(
     title: str | None = None,
     category: str | None = None,
     due_date: str | None = None,
+    due_time: str | None = None,
     status: str | None = None,
 ) -> dict[str, Any]:
     ws_id = await resolve_workspace_id(session, ctx)
@@ -101,6 +115,7 @@ async def update_task(
         title=title,
         category=category,
         due_date=parse_date(due_date) if due_date is not None else None,
+        due_time=parse_time(due_time) if due_time is not None else None,
         status=status,
     )
     t = await task_service.update_task(session, parse_uuid(task_id), ws_id, data)

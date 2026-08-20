@@ -6,7 +6,7 @@ have a small set of obviously-named fields, not the full SQLAlchemy row.
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -19,6 +19,14 @@ def parse_date(v: Any) -> Optional[date]:
     if isinstance(v, datetime):
         return v.date()
     return date.fromisoformat(str(v))
+
+
+def parse_time(v: Any) -> Optional[time]:
+    if v is None or v == "":
+        return None
+    if isinstance(v, time):
+        return v
+    return time.fromisoformat(str(v))
 
 
 def parse_uuid(v: Any) -> Optional[uuid.UUID]:

@@ -117,9 +117,7 @@
     "splitGroups": "Grupos",
     "goals": "Objetivos",
     "reports": "Informes",
-    "groupAnalysis": "Análisis",
-    "groupSetup": "Configuración",
-    "groupAccounts": "Cuentas",
+    "finances": "Finanzas",
     "groupAdmin": "Administración",
     "groupAgents": "IA",
     "agents": "Agentes",
@@ -1655,6 +1653,7 @@
       "applyFailed": "No se pudo aplicar",
       "showRaw": "Detalles de la herramienta",
       "collision": "el nombre ya está en uso por {{name}}",
+      "sendConfirm": "¿Enviar este correo a {{to}} ahora? Esto no se puede deshacer.",
       "kind": {
         "categorize": "Recategorizar transacciones",
         "create_category": "Crear categoría",
@@ -1664,7 +1663,9 @@
         "create_recurring_transaction": "Agregar transacción recurrente",
         "update_recurring_transaction": "Actualizar transacción recurrente",
         "cancel_recurring_transaction": "Cancelar transacción recurrente",
-        "create_goal": "Crear objetivo"
+        "create_goal": "Crear objetivo",
+        "create_email_draft": "Crear borrador de correo",
+        "send_email": "Enviar correo"
       },
       "summary": {
         "categorize": "{{count}} transacción(es) → {{category}}",
@@ -1676,7 +1677,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Detener las próximas ocurrencias de “{{description}}” (se conserva el historial)",
         "deleteRecurring": "Eliminar permanentemente “{{description}}”",
-        "createGoal": "“{{name}}” — objetivo {{target}}, fecha límite {{deadline}}"
+        "createGoal": "“{{name}}” — objetivo {{target}}, fecha límite {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: “{{subject}}”",
+        "sendEmail": "{{mailbox}} → {{to}}: “{{subject}}”"
       }
     },
     "conversation": {

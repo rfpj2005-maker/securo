@@ -121,9 +121,7 @@
     "splitGroups": "Groups",
     "goals": "Goals",
     "reports": "Reports",
-    "groupAnalysis": "Analysis",
-    "groupSetup": "Setup",
-    "groupAccounts": "Accounts",
+    "finances": "Finances",
     "groupAdmin": "Administration",
     "groupAgents": "AI",
     "agents": "Agents",
@@ -1358,6 +1356,7 @@
     "categoryPlaceholder": "Type or pick a category",
     "categoryHint": "Choose an existing one or type a new category.",
     "dueDate": "Due Date",
+    "dueTime": "Reminder time",
     "noDueDate": "No due date",
     "allCategories": "All Categories",
     "sortByDueDate": "Sort by due date",
@@ -1387,7 +1386,18 @@
     "voiceStop": "Stop",
     "voiceTapToStart": "Tap the microphone and say the task",
     "voiceListening": "Listening...",
-    "voiceSave": "Save task"
+    "voiceSave": "Save task",
+    "reminders": {
+      "enable": "Enable reminders",
+      "disable": "Disable",
+      "test": "Test",
+      "enabled": "Reminders enabled on this device",
+      "disabled": "Reminders disabled on this device",
+      "testSent": "Test notification sent",
+      "testFailed": "Couldn't send — try re-enabling",
+      "activeHint": "You'll get a notification when a task is due.",
+      "inactiveHint": "Turn on to be notified when a task is due."
+    }
   },
   "common": {
     "view": "View",
@@ -1787,7 +1797,13 @@
     "chat": {
       "placeholder": "Talk to {{name}}...",
       "voiceStart": "Speak",
-      "voiceStop": "Stop listening"
+      "voiceStop": "Stop listening",
+      "voiceModeStart": "Turn on voice mode — hands-free, good for driving",
+      "voiceModeStop": "Turn off voice mode",
+      "voiceModeListening": "Listening…",
+      "voiceModeThinking": "Thinking…",
+      "voiceModeSpeaking": "Speaking…",
+      "voiceModeUnsupported": "Voice mode needs speech recognition and speech synthesis — not supported in this browser."
     },
     "chart": {
       "noData": "No data to chart"
@@ -1799,6 +1815,7 @@
       "applyFailed": "Failed to apply",
       "showRaw": "Tool details",
       "collision": "name already used by {{name}}",
+      "sendConfirm": "Send this email to {{to}} now? This cannot be undone.",
       "kind": {
         "categorize": "Re-categorize transactions",
         "create_category": "Create category",
@@ -1808,7 +1825,9 @@
         "create_recurring_transaction": "Add recurring transaction",
         "update_recurring_transaction": "Update recurring transaction",
         "cancel_recurring_transaction": "Cancel recurring transaction",
-        "create_goal": "Create goal"
+        "create_goal": "Create goal",
+        "create_email_draft": "Create email draft",
+        "send_email": "Send email"
       },
       "summary": {
         "categorize": "{{count}} transaction(s) → {{category}}",
@@ -1820,7 +1839,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Stop future occurrences of “{{description}}” (history kept)",
         "deleteRecurring": "Permanently delete “{{description}}”",
-        "createGoal": "“{{name}}” — target {{target}}, deadline {{deadline}}"
+        "createGoal": "“{{name}}” — target {{target}}, deadline {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: “{{subject}}”",
+        "sendEmail": "{{mailbox}} → {{to}}: “{{subject}}”"
       }
     },
     "conversation": {

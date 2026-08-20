@@ -1,8 +1,8 @@
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, String, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -24,7 +24,16 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(255))
     category: Mapped[str] = mapped_column(String(20), default="administrative")  # marketing, management, commercial, administrative
     due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Time-of-day component for the due date — optional. When set, the
+    # reminder fires at this exact time (in the user's own timezone); when
+    # null, the reminder task falls back to a default hour. Meaningless
+    # without a due_date.
+    due_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, completed
+    # Set once the due-date push reminder has fired, so the periodic
+    # reminder job never notifies the same task twice. Cleared automatically
+    # whenever due_date/due_time changes (see task_service.update_task).
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # Set when a task was auto-created from a meeting's action items. Nullable —
     # most tasks aren't meeting-sourced. ON DELETE SET NULL so removing the
     # meeting recording keeps the task, just detaches its origin.

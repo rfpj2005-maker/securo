@@ -132,6 +132,14 @@ class Settings(BaseSettings):
     google_oauth_client_id: str = ""
     google_oauth_client_secret: SecretStr = SecretStr("")
 
+    # Web Push (task due-date reminders). Generate a pair with:
+    #   python -c "from py_vapid import Vapid; ..." (see docs) — or ask
+    # Claude to generate one. VAPID_CLAIM_EMAIL is the contact the push
+    # service (e.g. Chrome/FCM) may use if it needs to reach the sender.
+    vapid_private_key: SecretStr = SecretStr("")
+    vapid_public_key: str = ""
+    vapid_claim_email: str = ""
+
     # Meeting recordings — audio stored on disk, transcribed locally by
     # faster-whisper in the celery worker (no external API, audio never
     # leaves the server), then summarized/action-items extracted using the

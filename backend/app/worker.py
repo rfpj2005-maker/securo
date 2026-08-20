@@ -53,6 +53,13 @@ celery_app.conf.beat_schedule = {
         # stamped with the 1:1 fallback (or left NULL) once real rates land.
         "schedule": 60 * 60 * 12,
     },
+    "check-due-task-reminders": {
+        "task": "app.tasks.task_reminder_tasks.check_due_task_reminders",
+        # Every minute — a "reminder" that lands minutes late defeats the
+        # point. The query is cheap (per-user due-task lookup) and the task
+        # itself no-ops instantly if VAPID isn't configured.
+        "schedule": 60,
+    },
 }
 
 celery_app.conf.include = [
@@ -61,6 +68,7 @@ celery_app.conf.include = [
     "app.tasks.asset_tasks",
     "app.tasks.fx_rate_tasks",
     "app.tasks.meeting_tasks",
+    "app.tasks.task_reminder_tasks",
     # Optional agents module — registering the import is harmless when
     # AGENTS_ENABLED=false (the task just won't be dispatched).
     "app.agents.tasks.ingest",

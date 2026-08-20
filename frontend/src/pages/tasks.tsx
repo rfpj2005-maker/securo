@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDateLocale } from '@/hooks/use-display-locale'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tasks as tasksApi } from '@/lib/api'
+import { tasks as tasksApi, push as pushApi } from '@/lib/api'
+import { isPushSupported, enablePushOnThisDevice, disablePushOnThisDevice } from '@/lib/push'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
-import { Trash2, Pencil, Mic, Plus, ListChecks } from 'lucide-react'
+import { Trash2, Pencil, Mic, Plus, ListChecks, Bell, BellOff, BellRing } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '@/contexts/workspace-context'
 import type { Task } from '@/types'
@@ -59,6 +60,7 @@ export default function TasksPage() {
   const [formTitle, setFormTitle] = useState('')
   const [formCategory, setFormCategory] = useState('administrative')
   const [formDueDate, setFormDueDate] = useState('')
+  const [formDueTime, setFormDueTime] = useState('')
 
   const { data: allTasks, isLoading } = useQuery({
     queryKey: ['tasks'],
@@ -97,7 +99,7 @@ export default function TasksPage() {
   const liveEditingTask = editingTask ? (allTasks ?? []).find((t) => t.id === editingTask.id) ?? editingTask : null
 
   const createMutation = useMutation({
-    mutationFn: (data: { title: string; category: string; due_date?: string | null }) => tasksApi.create(data),
+    mutationFn: (data: { title: string; category: string; due_date?: string | null; due_time?: string | null }) => tasksApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setDialogOpen(false)
@@ -164,6 +166,7 @@ export default function TasksPage() {
     setFormTitle('')
     setFormCategory('administrative')
     setFormDueDate('')
+    setFormDueTime('')
     setNewSubtaskTitle('')
     setDialogOpen(true)
   }
@@ -173,6 +176,7 @@ export default function TasksPage() {
     setFormTitle(task.title)
     setFormCategory(task.category)
     setFormDueDate(task.due_date ?? '')
+    setFormDueTime(task.due_time ? task.due_time.slice(0, 5) : '')
     setNewSubtaskTitle('')
     setDialogOpen(true)
   }
@@ -185,12 +189,14 @@ export default function TasksPage() {
         title: formTitle,
         category,
         due_date: formDueDate || null,
+        due_time: formDueDate ? formDueTime || null : null,
       })
     } else {
       createMutation.mutate({
         title: formTitle,
         category,
         due_date: formDueDate || null,
+        due_time: formDueDate ? formDueTime || null : null,
       })
     }
   }
@@ -215,6 +221,8 @@ export default function TasksPage() {
           ) : undefined
         }
       />
+
+      {canWrite && <ReminderBanner />}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <select
@@ -346,9 +354,21 @@ export default function TasksPage() {
               </datalist>
               <p className="text-xs text-muted-foreground">{t('tasks.categoryHint')}</p>
             </div>
-            <div className="space-y-2">
-              <Label>{t('tasks.dueDate')}</Label>
-              <Input type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{t('tasks.dueDate')}</Label>
+                <Input type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('tasks.dueTime', 'Hora do lembrete')}</Label>
+                <Input
+                  type="time"
+                  value={formDueTime}
+                  onChange={(e) => setFormDueTime(e.target.value)}
+                  disabled={!formDueDate}
+                  placeholder="08:00"
+                />
+              </div>
             </div>
 
             {/* Subtasks — only once the task exists, since they need a task_id */}
@@ -466,6 +486,81 @@ export default function TasksPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+/** Enable/disable Web Push reminders for the current device. Hidden
+ * entirely on browsers that don't support the Push API — the button would
+ * just fail, so there's nothing useful to show. */
+function ReminderBanner() {
+  const { t } = useTranslation()
+  const qc = useQueryClient()
+  const supported = isPushSupported()
+
+  const { data: status, isLoading } = useQuery({
+    queryKey: ['push-status'],
+    queryFn: () => pushApi.status(),
+    enabled: supported,
+    staleTime: 1000 * 30,
+  })
+
+  const enableMutation = useMutation({
+    mutationFn: enablePushOnThisDevice,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['push-status'] })
+      toast.success(t('tasks.reminders.enabled', 'Lembretes ativados neste aparelho'))
+    },
+    onError: (err: unknown) => toast.error(err instanceof Error ? err.message : t('common.error')),
+  })
+
+  const disableMutation = useMutation({
+    mutationFn: disablePushOnThisDevice,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['push-status'] })
+      toast.success(t('tasks.reminders.disabled', 'Lembretes desativados neste aparelho'))
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
+  const testMutation = useMutation({
+    mutationFn: () => pushApi.test(),
+    onSuccess: () => toast.success(t('tasks.reminders.testSent', 'Notificação de teste enviada')),
+    onError: () => toast.error(t('tasks.reminders.testFailed', 'Não foi possível enviar — tente reativar')),
+  })
+
+  if (!supported || isLoading) return null
+
+  const subscribed = !!status?.subscribed
+
+  return (
+    <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg border border-border bg-card text-sm">
+      {subscribed ? (
+        <BellRing className="h-4 w-4 text-primary shrink-0" />
+      ) : (
+        <Bell className="h-4 w-4 text-muted-foreground shrink-0" />
+      )}
+      <span className="flex-1 text-muted-foreground">
+        {subscribed
+          ? t('tasks.reminders.activeHint', 'Você recebe uma notificação quando uma tarefa vence.')
+          : t('tasks.reminders.inactiveHint', 'Ative para ser avisado quando uma tarefa vencer.')}
+      </span>
+      {subscribed ? (
+        <>
+          <Button size="sm" variant="outline" onClick={() => testMutation.mutate()} disabled={testMutation.isPending}>
+            {t('tasks.reminders.test', 'Testar')}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => disableMutation.mutate()} disabled={disableMutation.isPending}>
+            <BellOff className="h-3.5 w-3.5 mr-1.5" />
+            {t('tasks.reminders.disable', 'Desativar')}
+          </Button>
+        </>
+      ) : (
+        <Button size="sm" onClick={() => enableMutation.mutate()} disabled={enableMutation.isPending}>
+          <Bell className="h-3.5 w-3.5 mr-1.5" />
+          {t('tasks.reminders.enable', 'Ativar lembretes')}
+        </Button>
+      )}
     </div>
   )
 }

@@ -56,6 +56,11 @@ async def update_task(
         return None
 
     update_data = data.model_dump(exclude_unset=True)
+    # Rescheduling (or reopening a completed task) means any past reminder
+    # no longer applies — clear the marker so the periodic job can notify
+    # again for the new due date/time.
+    if "due_date" in update_data or "due_time" in update_data or update_data.get("status") == "pending":
+        task.reminder_sent_at = None
     for key, value in update_data.items():
         setattr(task, key, value)
 

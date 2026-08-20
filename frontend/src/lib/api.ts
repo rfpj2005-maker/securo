@@ -48,6 +48,15 @@ import type {
   GoogleCalendarStatus,
   GoogleCalendarInfo,
   CalendarEvent,
+  GmailStatus,
+  GmailMessageSummary,
+  EmailConnectionStatus,
+  EmailConnectionCreate,
+  EmailDraftPayload,
+  EmailDraftResult,
+  EmailSendResult,
+  PushSubscribeKeys,
+  PushStatus,
   DashboardSummary,
   SpendingByCategory,
   MonthlyTrend,
@@ -1014,6 +1023,57 @@ export const googleCalendar = {
   },
 }
 
+// Gmail — read-only (Phase 1) + drafting (Phase 3)
+export const gmail = {
+  status: async (): Promise<GmailStatus> => {
+    const { data } = await api.get('/integrations/gmail/status')
+    return data
+  },
+  connect: async (): Promise<{ authorize_url: string }> => {
+    const { data } = await api.get('/integrations/gmail/connect')
+    return data
+  },
+  disconnect: async (): Promise<void> => {
+    await api.delete('/integrations/gmail')
+  },
+  search: async (q: string, maxResults = 20): Promise<GmailMessageSummary[]> => {
+    const { data } = await api.get('/integrations/gmail/messages', { params: { q, max_results: maxResults } })
+    return data
+  },
+  createDraft: async (payload: EmailDraftPayload): Promise<EmailDraftResult> => {
+    const { data } = await api.post('/integrations/gmail/drafts', payload)
+    return data
+  },
+  sendMessage: async (payload: EmailDraftPayload): Promise<EmailSendResult> => {
+    const { data } = await api.post('/integrations/gmail/send', payload)
+    return data
+  },
+}
+
+// Generic IMAP email (Hostinger, or any other non-Gmail mailbox) — Phase 2
+// read-only + Phase 3 drafting
+export const emailConnection = {
+  status: async (): Promise<EmailConnectionStatus> => {
+    const { data } = await api.get('/integrations/email/status')
+    return data
+  },
+  connect: async (payload: EmailConnectionCreate): Promise<EmailConnectionStatus> => {
+    const { data } = await api.post('/integrations/email', payload)
+    return data
+  },
+  disconnect: async (): Promise<void> => {
+    await api.delete('/integrations/email')
+  },
+  createDraft: async (payload: EmailDraftPayload): Promise<EmailDraftResult> => {
+    const { data } = await api.post('/integrations/email/drafts', payload)
+    return data
+  },
+  sendMessage: async (payload: EmailDraftPayload): Promise<EmailSendResult> => {
+    const { data } = await api.post('/integrations/email/send', payload)
+    return data
+  },
+}
+
 // Tasks
 export const tasks = {
   list: async (params?: { category?: string; status?: string }): Promise<Task[]> => {
@@ -1024,11 +1084,11 @@ export const tasks = {
     const { data } = await api.get(`/tasks/${id}`)
     return data
   },
-  create: async (task: { title: string; category?: string; due_date?: string | null; status?: string }): Promise<Task> => {
+  create: async (task: { title: string; category?: string; due_date?: string | null; due_time?: string | null; status?: string }): Promise<Task> => {
     const { data } = await api.post('/tasks', task)
     return data
   },
-  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'status'>>): Promise<Task> => {
+  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'due_time' | 'status'>>): Promise<Task> => {
     const { data } = await api.patch(`/tasks/${id}`, task)
     return data
   },
@@ -1047,6 +1107,28 @@ export const tasks = {
     delete: async (taskId: string, subtaskId: string): Promise<void> => {
       await api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`)
     },
+  },
+}
+
+// Web Push — task due-date reminders
+export const push = {
+  vapidPublicKey: async (): Promise<{ public_key: string }> => {
+    const { data } = await api.get('/push/vapid-public-key')
+    return data
+  },
+  status: async (): Promise<PushStatus> => {
+    const { data } = await api.get('/push/status')
+    return data
+  },
+  subscribe: async (payload: { endpoint: string; keys: PushSubscribeKeys; user_agent?: string }): Promise<void> => {
+    await api.post('/push/subscribe', payload)
+  },
+  unsubscribe: async (endpoint: string): Promise<void> => {
+    await api.post('/push/unsubscribe', { endpoint })
+  },
+  test: async (): Promise<{ sent: number }> => {
+    const { data } = await api.post('/push/test')
+    return data
   },
 }
 

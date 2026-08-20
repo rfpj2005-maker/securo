@@ -764,11 +764,22 @@ export interface Task {
   title: string
   category: string
   due_date: string | null
+  due_time: string | null // HH:MM:SS
   status: 'pending' | 'completed'
   source_meeting_id: string | null
   created_at: string
   updated_at: string
   subtasks: Subtask[]
+}
+
+export interface PushSubscribeKeys {
+  p256dh: string
+  auth: string
+}
+
+export interface PushStatus {
+  subscribed: boolean
+  device_count: number
 }
 
 export type MeetingType = 'in_person' | 'online'
@@ -907,6 +918,56 @@ export interface GoogleCalendarInfo {
   id: string
   summary: string
   primary: boolean
+}
+
+export interface GmailStatus {
+  connected: boolean
+  gmail_email: string | null
+}
+
+export interface GmailMessageSummary {
+  id: string
+  thread_id: string | null
+  subject: string | null
+  sender: string | null
+  to: string | null
+  date: string | null
+  snippet: string | null
+  labels: string[]
+}
+
+export interface EmailConnectionStatus {
+  connected: boolean
+  email_address: string | null
+  imap_host: string | null
+}
+
+export interface EmailConnectionCreate {
+  email_address: string
+  imap_host: string
+  imap_port: number
+  imap_use_ssl: boolean
+  username: string
+  password: string
+}
+
+export interface EmailDraftPayload {
+  to: string
+  subject: string
+  body: string
+  cc?: string
+  bcc?: string
+}
+
+export interface EmailDraftResult {
+  id?: string
+  message_id?: string
+  folder?: string
+}
+
+export interface EmailSendResult {
+  sent: boolean
+  message_id?: string
 }
 
 export interface CalendarEvent {

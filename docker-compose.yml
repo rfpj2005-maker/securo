@@ -8,7 +8,7 @@ x-podman:
   in_pod: false
 
 x-backend-env: &backend-env
-  DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/securo
+  DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/securo
   SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-production}
   DEBUG: ${DEBUG:-true}
   FRONTEND_URL: ${FRONTEND_URL:-http://localhost:${FRONTEND_PORT:-3000}}
@@ -46,6 +46,9 @@ x-backend-env: &backend-env
   SIPROV_API_PASSWORD: ${SIPROV_API_PASSWORD:-}
   GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
   GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET:-}
+  VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+  VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+  VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
   STORAGE_LOCAL_PATH: /app/data/attachments
   AGENTS_KNOWLEDGE_STORAGE_PATH: /app/data/agent_knowledge
   # Meeting recordings — audio on disk, transcribed locally by faster-whisper
@@ -122,7 +125,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: securo
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -138,14 +141,18 @@ services:
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port
       8000 --reload"
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      # localhost-only by default: this API sits behind Tailscale serve (or
+      # another reverse proxy), which connects to it via localhost — binding
+      # to 0.0.0.0 would needlessly expose it to the whole LAN too.
+      # Set BACKEND_BIND_IP=0.0.0.0 to deliberately expose it to the LAN/WAN.
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
     ports:
-      - "${FRONTEND_PORT:-3000}:5173"
+      - "${FRONTEND_BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-3000}:5173"
     environment:
       BACKEND_URL: http://backend:8000
       # Also drives Vite's allowedHosts, so a proxied domain is not blocked.

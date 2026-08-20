@@ -27,7 +27,10 @@ from app.models.collection import Collection, collection_accounts, collection_as
 from app.models.task import Task
 from app.models.subtask import Subtask
 from app.models.google_calendar_connection import GoogleCalendarConnection
+from app.models.gmail_connection import GmailConnection
+from app.models.email_connection import EmailConnection
 from app.models.meeting import Meeting
+from app.models.push_subscription import PushSubscription
 
 # Side-effect import: register the before_insert listener that auto-stamps
 # workspace_id from user_id on financial entities. Imported last so all
@@ -70,4 +73,5 @@ __all__ = [
     "Subtask",
     "GoogleCalendarConnection",
     "Meeting",
+    "PushSubscription",
 ]

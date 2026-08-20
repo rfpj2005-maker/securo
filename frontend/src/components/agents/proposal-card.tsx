@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import {
   budgets,
   categories,
+  emailConnection as emailApi,
+  gmail as gmailApi,
   goals,
   recurring,
   rules,
@@ -24,6 +26,8 @@ type ProposalKind =
   | 'update_recurring_transaction'
   | 'cancel_recurring_transaction'
   | 'create_goal'
+  | 'create_email_draft'
+  | 'send_email'
 
 interface ProposalData {
   kind?: ProposalKind
@@ -149,7 +153,21 @@ export function ProposalCard({ toolCallId, data }: Props) {
               {t('agents.proposal.applied')}
             </span>
           ) : (
-            <Button size="sm" onClick={() => apply.mutate()} disabled={apply.isPending}>
+            <Button
+              size="sm"
+              onClick={() => {
+                // Sending is irreversible (unlike every other proposal
+                // kind, which only ever touches Securo's own DB) — an
+                // extra native confirm mirrors the guard already used
+                // elsewhere in the app for delete actions.
+                if (kind === 'send_email') {
+                  const p = (data.proposed || {}) as Record<string, unknown>
+                  if (!confirm(t('agents.proposal.sendConfirm', { to: String(p.to ?? '?') }))) return
+                }
+                apply.mutate()
+              }}
+              disabled={apply.isPending}
+            >
               {apply.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
               ) : (
@@ -241,6 +259,18 @@ function renderSummary(kind: ProposalKind, d: ProposalData, t: ReturnType<typeof
         name: String(p.name ?? '?'),
         target: fmt(p.target_amount, p.currency),
         deadline: p.deadline ? String(p.deadline) : '—',
+      })
+    case 'create_email_draft':
+      return t('agents.proposal.summary.createEmailDraft', {
+        mailbox: String(p.mailbox ?? '?'),
+        to: String(p.to ?? '?'),
+        subject: String(p.subject ?? ''),
+      })
+    case 'send_email':
+      return t('agents.proposal.summary.sendEmail', {
+        mailbox: String(p.mailbox ?? '?'),
+        to: String(p.to ?? '?'),
+        subject: String(p.subject ?? ''),
       })
     default:
       return ''
@@ -407,6 +437,28 @@ async function applyProposal(data: ProposalData): Promise<string | void> {
       } as Parameters<typeof goals.create>[0])
       return g.id
     }
+    case 'create_email_draft': {
+      const draftPayload = {
+        to: String(p.to),
+        subject: String(p.subject ?? ''),
+        body: String(p.body ?? ''),
+        cc: (p.cc as string) || undefined,
+        bcc: (p.bcc as string) || undefined,
+      }
+      const result = p.provider === 'gmail' ? await gmailApi.createDraft(draftPayload) : await emailApi.createDraft(draftPayload)
+      return result.id || result.folder
+    }
+    case 'send_email': {
+      const sendPayload = {
+        to: String(p.to),
+        subject: String(p.subject ?? ''),
+        body: String(p.body ?? ''),
+        cc: (p.cc as string) || undefined,
+        bcc: (p.bcc as string) || undefined,
+      }
+      const result = p.provider === 'gmail' ? await gmailApi.sendMessage(sendPayload) : await emailApi.sendMessage(sendPayload)
+      return result.message_id
+    }
   }
 }
 
@@ -418,7 +470,7 @@ export function isProposalData(data: unknown): data is ProposalData {
     'categorize', 'create_category', 'create_budget', 'create_payee_rule',
     'create_transaction', 'create_recurring_transaction',
     'update_recurring_transaction', 'cancel_recurring_transaction',
-    'create_goal',
+    'create_goal', 'create_email_draft', 'send_email',
   ].includes(k)
 }
 

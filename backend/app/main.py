@@ -33,8 +33,11 @@ from app.api.currencies import router as currencies_router
 from app.api.export import router as export_router
 from app.api.fx_rates import router as fx_rates_router
 from app.api.google_calendar import router as google_calendar_router
+from app.api.gmail import router as gmail_router
+from app.api.email_connections import router as email_connections_router
 from app.api.attachments import router as attachments_router
 from app.api.payees import router as payees_router
+from app.api.push import router as push_router
 from app.api.settings import router as settings_router
 from app.api.subtasks import router as subtasks_router
 from app.api.tasks import router as tasks_router
@@ -51,6 +54,15 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Fail fast rather than silently signing JWTs with a secret anyone can read
+# in the source. DEBUG stays permissive for local dev where SECRET_KEY often
+# isn't set.
+if not settings.debug and settings.secret_key.get_secret_value() == "change-me-in-production":
+    raise RuntimeError(
+        "SECRET_KEY is still the default placeholder. Set a real SECRET_KEY "
+        "in your .env before running with DEBUG=false."
+    )
 
 
 async def _warm_tesouro_cache() -> None:
@@ -116,6 +128,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    # Baseline hardening — the frontend is a separate app the browser
+    # shouldn't be embedding this API's responses into via framing/sniffing.
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    return response
 
 # Auth routes — custom login/logout with 2FA support (mounted first to take precedence)
 app.include_router(
@@ -185,7 +208,10 @@ app.include_router(payees_router)
 app.include_router(tasks_router)
 app.include_router(subtasks_router)
 app.include_router(google_calendar_router)
+app.include_router(gmail_router)
+app.include_router(email_connections_router)
 app.include_router(meetings_router)
+app.include_router(push_router)
 app.include_router(settings_router)
 app.include_router(workspaces_router)
 app.include_router(admin_router)

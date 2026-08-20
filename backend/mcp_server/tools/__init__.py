@@ -17,5 +17,7 @@ from mcp_server.tools import (  # noqa: F401
     siprov,
     tasks,
     google_calendar,
+    gmail,
+    email_imap,
     meetings,
 )

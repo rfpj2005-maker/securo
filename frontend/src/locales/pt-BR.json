@@ -117,13 +117,11 @@
     "tasks": "Tarefas",
     "siprov": "Siprov",
     "calendar": "Calendário",
-    "meetings": "Reuniões",
+    "meetings": "Gravação",
     "splitGroups": "Grupos",
     "goals": "Metas",
     "reports": "Relatórios",
-    "groupAnalysis": "Análise",
-    "groupSetup": "Configuração",
-    "groupAccounts": "Contas",
+    "finances": "Finanças",
     "groupAdmin": "Administração",
     "groupAgents": "IA",
     "agents": "Agentes",
@@ -1313,9 +1311,11 @@
     "eventDeleted": "Evento excluído"
   },
   "meetings": {
-    "title": "Reuniões",
+    "title": "Gravação",
     "new": "Nova gravação",
-    "empty": "Nenhuma reunião gravada ainda",
+    "empty": "Nenhuma gravação ainda",
+    "recordingInBackground": "Gravando em segundo plano — toque para abrir",
+    "continueInBackground": "Continuar em segundo plano",
     "untitled": "Reunião",
     "titleLabel": "Título",
     "titlePlaceholder": "Ex.: Reunião de diretoria",
@@ -1358,6 +1358,7 @@
     "categoryPlaceholder": "Digite ou escolha uma categoria",
     "categoryHint": "Escolha uma existente ou digite uma nova.",
     "dueDate": "Prazo",
+    "dueTime": "Hora do lembrete",
     "noDueDate": "Sem prazo",
     "allCategories": "Todas as categorias",
     "sortByDueDate": "Ordenar por prazo",
@@ -1387,7 +1388,18 @@
     "voiceStop": "Parar",
     "voiceTapToStart": "Toque no microfone e fale a tarefa",
     "voiceListening": "Ouvindo...",
-    "voiceSave": "Salvar tarefa"
+    "voiceSave": "Salvar tarefa",
+    "reminders": {
+      "enable": "Ativar lembretes",
+      "disable": "Desativar",
+      "test": "Testar",
+      "enabled": "Lembretes ativados neste aparelho",
+      "disabled": "Lembretes desativados neste aparelho",
+      "testSent": "Notificação de teste enviada",
+      "testFailed": "Não foi possível enviar — tente reativar",
+      "activeHint": "Você recebe uma notificação quando uma tarefa vence.",
+      "inactiveHint": "Ative para ser avisado quando uma tarefa vencer."
+    }
   },
   "common": {
     "view": "Ver",
@@ -1772,7 +1784,13 @@
     "chat": {
       "placeholder": "Converse com {{name}}...",
       "voiceStart": "Falar",
-      "voiceStop": "Parar de ouvir"
+      "voiceStop": "Parar de ouvir",
+      "voiceModeStart": "Ativar modo voz — mãos livres, ótimo pra dirigir",
+      "voiceModeStop": "Desativar modo voz",
+      "voiceModeListening": "Ouvindo…",
+      "voiceModeThinking": "Pensando…",
+      "voiceModeSpeaking": "Falando…",
+      "voiceModeUnsupported": "O modo voz precisa de reconhecimento e síntese de voz — não suportado neste navegador."
     },
     "chart": {
       "noData": "Sem dados para o gráfico"
@@ -1784,6 +1802,7 @@
       "applyFailed": "Falha ao aplicar",
       "showRaw": "Detalhes da ferramenta",
       "collision": "nome já usado por {{name}}",
+      "sendConfirm": "Enviar este email para {{to}} agora? Isso não pode ser desfeito.",
       "kind": {
         "categorize": "Recategorizar transações",
         "create_category": "Criar categoria",
@@ -1793,7 +1812,9 @@
         "create_recurring_transaction": "Adicionar transação recorrente",
         "update_recurring_transaction": "Atualizar transação recorrente",
         "cancel_recurring_transaction": "Cancelar transação recorrente",
-        "create_goal": "Criar meta"
+        "create_goal": "Criar meta",
+        "create_email_draft": "Criar rascunho de email",
+        "send_email": "Enviar email"
       },
       "summary": {
         "categorize": "{{count}} transação(ões) → {{category}}",
@@ -1805,7 +1826,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Parar futuras ocorrências de “{{description}}” (histórico mantido)",
         "deleteRecurring": "Excluir permanentemente “{{description}}”",
-        "createGoal": "“{{name}}” — meta {{target}}, prazo {{deadline}}"
+        "createGoal": "“{{name}}” — meta {{target}}, prazo {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: “{{subject}}”",
+        "sendEmail": "{{mailbox}} → {{to}}: “{{subject}}”"
       }
     },
     "conversation": {

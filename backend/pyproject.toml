@@ -41,6 +41,9 @@ dependencies = [
     # audio ever leaves the server. Model weights (~500MB for "small")
     # download once on first use to meetings_whisper_model_path.
     "faster-whisper>=1.0.0",
+    # Web Push (task reminders) — VAPID-signed push to the browser's push
+    # service (Chrome/FCM, etc). No third-party push provider account needed.
+    "pywebpush>=2.0.0",
 ]
 
 [project.optional-dependencies]

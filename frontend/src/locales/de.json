@@ -117,9 +117,7 @@
     "splitGroups": "Gruppen",
     "goals": "Ziele",
     "reports": "Berichte",
-    "groupAnalysis": "Analyse",
-    "groupSetup": "Einrichtung",
-    "groupAccounts": "Konten",
+    "finances": "Finanzen",
     "groupAdmin": "Administration",
     "groupAgents": "KI",
     "agents": "Agenten",
@@ -1670,6 +1668,7 @@
       "applyFailed": "Anwendung fehlgeschlagen",
       "showRaw": "Werkzeug-Details",
       "collision": "Name bereits verwendet von {{name}}",
+      "sendConfirm": "Diese E-Mail jetzt an {{to}} senden? Dies kann nicht rückgängig gemacht werden.",
       "kind": {
         "categorize": "Transaktionen neu kategorisieren",
         "create_category": "Kategorie erstellen",
@@ -1679,7 +1678,9 @@
         "create_recurring_transaction": "Wiederkehrende Transaktion hinzufügen",
         "update_recurring_transaction": "Wiederkehrende Transaktion aktualisieren",
         "cancel_recurring_transaction": "Wiederkehrende Transaktion kündigen",
-        "create_goal": "Ziel erstellen"
+        "create_goal": "Ziel erstellen",
+        "create_email_draft": "E-Mail-Entwurf erstellen",
+        "send_email": "E-Mail senden"
       },
       "summary": {
         "categorize": "{{count}} Transaktion(en) → {{category}}",
@@ -1691,7 +1692,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Zukünftige Vorkommen von “{{description}}” stoppen (Verlauf bleibt erhalten)",
         "deleteRecurring": "“{{description}}” dauerhaft löschen",
-        "createGoal": "“{{name}}” — Ziel {{target}}, Frist {{deadline}}"
+        "createGoal": "“{{name}}” — Ziel {{target}}, Frist {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: “{{subject}}”",
+        "sendEmail": "{{mailbox}} → {{to}}: “{{subject}}”"
       }
     },
     "conversation": {

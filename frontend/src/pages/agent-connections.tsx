@@ -1,15 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, CheckCircle2, Edit2, Plug, Plus, Star, Trash2, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Edit2, Mail, Plug, Plus, Star, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/page-header'
-import { agents } from '@/lib/api'
+import { agents, gmail as gmailApi, emailConnection as emailApi } from '@/lib/api'
 import type { LlmConnection } from '@/lib/api'
 import { ConnectionFormDialog } from '@/components/agents/connection-form-dialog'
+import { EmailConnectionDialog } from '@/components/agents/email-connection-dialog'
 import { McpExternalPanel } from '@/components/agents/mcp-external-panel'
 import { useWorkspace } from '@/contexts/workspace-context'
 
@@ -20,6 +21,53 @@ export default function AgentConnectionsPage() {
   const [editing, setEditing] = useState<LlmConnection | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; detail: string }>>({})
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [emailFormOpen, setEmailFormOpen] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get('gmail_connected')) {
+      toast.success(t('agents.connections.gmail.connected', 'Gmail connected'))
+      setSearchParams({}, { replace: true })
+    } else if (searchParams.get('gmail_error')) {
+      toast.error(t('agents.connections.gmail.connectError', 'Could not connect Gmail'))
+      setSearchParams({}, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { data: gmailStatus, isLoading: gmailLoading } = useQuery({
+    queryKey: ['gmail', 'status'],
+    queryFn: () => gmailApi.status(),
+  })
+
+  const gmailConnectMut = useMutation({
+    mutationFn: () => gmailApi.connect(),
+    onSuccess: (data) => {
+      window.location.href = data.authorize_url
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
+  const gmailDisconnectMut = useMutation({
+    mutationFn: () => gmailApi.disconnect(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['gmail', 'status'] })
+      toast.success(t('agents.connections.gmail.disconnected', 'Gmail disconnected'))
+    },
+  })
+
+  const { data: emailStatus, isLoading: emailLoading } = useQuery({
+    queryKey: ['email-connection', 'status'],
+    queryFn: () => emailApi.status(),
+  })
+
+  const emailDisconnectMut = useMutation({
+    mutationFn: () => emailApi.disconnect(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['email-connection', 'status'] })
+      toast.success(t('agents.connections.email.disconnected', 'Email disconnected'))
+    },
+  })
 
   const { data: list, isLoading } = useQuery({
     queryKey: ['agent-connections'],
@@ -165,12 +213,103 @@ export default function AgentConnectionsPage() {
 
       <McpExternalPanel />
 
+      {/* Gmail — a per-person connection, like Google Calendar: each user
+          links their own inbox, and their agent's Ferramentas tab is where
+          search_gmail/get_gmail_message get switched on for it. */}
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-foreground mb-1">
+          {t('agents.connections.gmail.title', 'Gmail')}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-3 max-w-2xl">
+          {t(
+            'agents.connections.gmail.subtitle',
+            'Connect your own Gmail so your agents can search and read it (read-only for now — drafting and sending come later).',
+          )}
+        </p>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+            <Mail className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {gmailLoading ? (
+              <span className="text-sm text-muted-foreground">{t('agents.loading')}</span>
+            ) : gmailStatus?.connected ? (
+              <>
+                <p className="text-sm font-medium text-foreground truncate">{gmailStatus.gmail_email}</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1 mt-0.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('agents.connections.gmail.connectedLabel', 'Connected')}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('agents.connections.gmail.notConnected', 'Not connected')}</p>
+            )}
+          </div>
+          {canWrite && (
+            gmailStatus?.connected ? (
+              <Button size="sm" variant="outline" onClick={() => gmailDisconnectMut.mutate()} disabled={gmailDisconnectMut.isPending}>
+                {t('agents.connections.gmail.disconnect', 'Disconnect')}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => gmailConnectMut.mutate()} disabled={gmailConnectMut.isPending}>
+                {t('agents.connections.gmail.connect', 'Connect Gmail')}
+              </Button>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Generic IMAP email (Hostinger, or any other traditional mailbox) —
+          same per-person model as Gmail, but no OAuth: the user types their
+          own IMAP host/username/password directly into this form. */}
+      <div className="mt-8">
+        <h2 className="text-sm font-semibold text-foreground mb-1">
+          {t('agents.connections.email.title', 'Email')}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-3 max-w-2xl">
+          {t(
+            'agents.connections.email.subtitle',
+            'Connect a business or other traditional mailbox (e.g. Hostinger) via IMAP so your agents can search and read it.',
+          )}
+        </p>
+        <div className="bg-card rounded-xl border border-border shadow-sm p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+            <Mail className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {emailLoading ? (
+              <span className="text-sm text-muted-foreground">{t('agents.loading')}</span>
+            ) : emailStatus?.connected ? (
+              <>
+                <p className="text-sm font-medium text-foreground truncate">{emailStatus.email_address}</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1 mt-0.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> {t('agents.connections.email.connectedLabel', 'Connected')}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">{t('agents.connections.email.notConnected', 'Not connected')}</p>
+            )}
+          </div>
+          {canWrite && (
+            emailStatus?.connected ? (
+              <Button size="sm" variant="outline" onClick={() => emailDisconnectMut.mutate()} disabled={emailDisconnectMut.isPending}>
+                {t('agents.connections.email.disconnect', 'Disconnect')}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setEmailFormOpen(true)}>
+                {t('agents.connections.email.connect', 'Connect email')}
+              </Button>
+            )
+          )}
+        </div>
+      </div>
+
       <ConnectionFormDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ConnectionFormDialog
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(null)}
         connection={editing}
       />
+      <EmailConnectionDialog open={emailFormOpen} onOpenChange={setEmailFormOpen} />
     </div>
   )
 }

@@ -117,9 +117,7 @@
     "splitGroups": "Групи",
     "goals": "Цілі",
     "reports": "Звіти",
-    "groupAnalysis": "Аналіз",
-    "groupSetup": "Налаштування",
-    "groupAccounts": "Рахунки",
+    "finances": "Фінанси",
     "groupAdmin": "Адміністрування",
     "groupAgents": "ШІ",
     "agents": "Агенти",
@@ -1676,6 +1674,7 @@
       "applyFailed": "Не вдалося застосувати",
       "showRaw": "Деталі інструмента",
       "collision": "ім'я вже використовується {{name}}",
+      "sendConfirm": "Надіслати цей лист {{to}} зараз? Цю дію не можна скасувати.",
       "kind": {
         "categorize": "Перекатегоризувати транзакції",
         "create_category": "Створити категорію",
@@ -1685,7 +1684,9 @@
         "create_recurring_transaction": "Додати регулярну транзакцію",
         "update_recurring_transaction": "Оновити регулярну транзакцію",
         "cancel_recurring_transaction": "Скасувати регулярну транзакцію",
-        "create_goal": "Створити ціль"
+        "create_goal": "Створити ціль",
+        "create_email_draft": "Створити чернетку листа",
+        "send_email": "Надіслати лист"
       },
       "summary": {
         "categorize": "{{count}} транзакцій → {{category}}",
@@ -1697,7 +1698,9 @@
         "updateRecurring": "{{description}} → {{changes}}",
         "deactivateRecurring": "Зупинити майбутні повторення «{{description}}» (історія збережена)",
         "deleteRecurring": "Назавжди видалити «{{description}}»",
-        "createGoal": "«{{name}}» — ціль {{target}}, термін {{deadline}}"
+        "createGoal": "«{{name}}» — ціль {{target}}, термін {{deadline}}",
+        "createEmailDraft": "{{mailbox}} → {{to}}: «{{subject}}»",
+        "sendEmail": "{{mailbox}} → {{to}}: «{{subject}}»"
       }
     },
     "conversation": {

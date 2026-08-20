@@ -1370,6 +1370,22 @@ async def _apply_update_to_row(
     has_fx_override = "amount_primary" in update_data or "fx_rate_used" in update_data
     override_amount_primary = update_data.get("amount_primary")
     override_fx_rate = update_data.get("fx_rate_used")
+    heals_fx_on_post = (
+        tx.status == "pending"
+        and update_data.get("status") == "posted"
+        and (
+            tx.amount_primary is None
+            or tx.fx_rate_used is None
+            or tx.fx_rate_used == 1
+        )
+    )
+
+    description_changed = (
+        "description" in update_data
+        and update_data["description"] != tx.description
+    )
+    if description_changed:
+        tx.description_is_rule_managed = False
 
     fx_keys = {"amount_primary", "fx_rate_used"}
     for key, value in update_data.items():
@@ -1392,7 +1408,7 @@ async def _apply_update_to_row(
                 override_amount_primary,
                 override_fx_rate,
             )
-    elif needs_restamp:
+    elif needs_restamp or heals_fx_on_post:
         await stamp_primary_amount(session, user_id, tx)
 
     # Refresh effective_date when the purchase date, account, or the manual
@@ -1424,6 +1440,8 @@ async def _apply_update_to_row(
             # away the number the user entered (issue #529).
             keeps_own_amount = tx.transfer_amount_explicit or paired_tx.transfer_amount_explicit
             for key in cascade_fields & update_data.keys():
+                if key == "description" and not description_changed:
+                    continue
                 if key == "amount" and paired_tx.currency != tx.currency:
                     if keeps_own_amount:
                         continue
@@ -1433,6 +1451,11 @@ async def _apply_update_to_row(
                     )
                     paired_tx.amount = converted
                 elif key != "amount":
+                    if (
+                        key == "description"
+                        and update_data[key] != paired_tx.description
+                    ):
+                        paired_tx.description_is_rule_managed = False
                     setattr(paired_tx, key, update_data[key])
                 else:
                     paired_tx.amount = update_data[key]

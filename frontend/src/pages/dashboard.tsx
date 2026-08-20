@@ -11,6 +11,7 @@ import { invalidateFinancialQueries } from '@/lib/invalidate-queries'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { ProjectedTransactionBadge } from '@/components/projected-transaction-badge'
 import {
   Select,
   SelectContent,
@@ -263,7 +264,7 @@ export default function DashboardPage() {
 
   const { data: projectedTxs, isLoading: projectedTxLoading } = useQuery({
     queryKey: ['dashboard', 'projected-transactions', selectedMonth],
-    queryFn: () => dashboard.projectedTransactions(monthParam),
+    queryFn: () => dashboard.projectedTransactions({ month: monthParam }),
   })
 
   const { data: budgetComparison } = useQuery({
@@ -573,6 +574,8 @@ export default function DashboardPage() {
   const monthVariation = currentLatestBalance - currentStartBalance
 
   const totalBalance = summary?.total_balance_primary ?? Object.values(summary?.total_balance ?? {}).reduce((a, b) => a + Number(b), 0)
+  const projectedBalance = summary?.projected_balance_primary ?? Object.values(summary?.projected_balance ?? {}).reduce((a, b) => a + Number(b), 0)
+  const hasProjectedBalance = Math.abs(projectedBalance - totalBalance) >= 0.01
 
   // Uncategorized data
   const uncategorizedCount = summary?.pending_categorization ?? 0
@@ -710,7 +713,7 @@ export default function DashboardPage() {
         categoryIcon: pt.category_icon,
         categoryName: pt.category_name,
         categoryColor: pt.category_color ?? null,
-        accountId: null,
+        accountId: pt.account_id,
         isProjected: true,
         attachmentCount: 0,
         isShared: false,
@@ -1283,9 +1286,7 @@ export default function DashboardPage() {
                             </span>
                           )}
                           {row.isProjected && (
-                            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wide text-primary bg-primary/5 border border-primary/10 px-1.5 py-0.5 rounded-full shrink-0">
-                              {t('transactions.recurringBadge')}
-                            </span>
+                            <ProjectedTransactionBadge />
                           )}
                           {row.installmentNumber != null && row.totalInstallments != null && (
                             <span className="inline-flex items-center text-[9px] font-bold tabular-nums text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 px-1 py-0.5 rounded-full shrink-0">
@@ -1400,9 +1401,7 @@ export default function DashboardPage() {
                                 </span>
                               )}
                               {row.isProjected && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-600 shrink-0">
-                                  {t('transactions.recurringBadge')}
-                                </span>
+                                <ProjectedTransactionBadge />
                               )}
                               {row.installmentNumber != null && row.totalInstallments != null && (
                                 <span className="inline-flex items-center text-[10px] font-bold tabular-nums text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 px-1.5 py-0.5 rounded-full shrink-0">

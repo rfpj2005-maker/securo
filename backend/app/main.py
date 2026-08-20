@@ -36,6 +36,7 @@ from app.api.google_calendar import router as google_calendar_router
 from app.api.gmail import router as gmail_router
 from app.api.email_connections import router as email_connections_router
 from app.api.attachments import router as attachments_router
+from app.api.fiscal import router as fiscal_router
 from app.api.payees import router as payees_router
 from app.api.push import router as push_router
 from app.api.settings import router as settings_router
@@ -204,6 +205,7 @@ app.include_router(currencies_router)
 app.include_router(fx_rates_router)
 app.include_router(export_router)
 app.include_router(attachments_router)
+app.include_router(fiscal_router)
 app.include_router(payees_router)
 app.include_router(tasks_router)
 app.include_router(subtasks_router)

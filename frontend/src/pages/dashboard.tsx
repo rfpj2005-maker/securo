@@ -574,8 +574,6 @@ export default function DashboardPage() {
   const monthVariation = currentLatestBalance - currentStartBalance
 
   const totalBalance = summary?.total_balance_primary ?? Object.values(summary?.total_balance ?? {}).reduce((a, b) => a + Number(b), 0)
-  const projectedBalance = summary?.projected_balance_primary ?? Object.values(summary?.projected_balance ?? {}).reduce((a, b) => a + Number(b), 0)
-  const hasProjectedBalance = Math.abs(projectedBalance - totalBalance) >= 0.01
 
   // Uncategorized data
   const uncategorizedCount = summary?.pending_categorization ?? 0

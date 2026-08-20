@@ -1,7 +1,7 @@
 """add meetings table
 
-Revision ID: 073
-Revises: 072
+Revision ID: 076
+Revises: 075
 Create Date: 2026-08-15
 
 Meeting recordings (in-person or online): raw audio on disk, transcript and
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "073"
-down_revision: Union[str, None] = "072"
+revision: str = "076"
+down_revision: Union[str, None] = "075"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

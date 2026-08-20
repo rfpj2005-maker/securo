@@ -1,7 +1,7 @@
 """add email_connections table
 
-Revision ID: 076
-Revises: 075
+Revision ID: 079
+Revises: 078
 Create Date: 2026-08-16
 
 IMAP-based email connections (Hostinger, or any other provider that isn't
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "076"
-down_revision: Union[str, None] = "075"
+revision: str = "079"
+down_revision: Union[str, None] = "078"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

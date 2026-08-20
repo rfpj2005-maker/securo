@@ -1,7 +1,7 @@
 """add task_subtasks table
 
-Revision ID: 071
-Revises: 070
+Revision ID: 074
+Revises: 073
 Create Date: 2026-08-14
 
 Sub-checklist items inside a Task, so a to-do can be broken into smaller
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "071"
-down_revision: Union[str, None] = "070"
+revision: str = "074"
+down_revision: Union[str, None] = "073"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

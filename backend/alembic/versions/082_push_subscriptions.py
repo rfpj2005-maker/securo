@@ -1,7 +1,7 @@
 """add push_subscriptions table
 
-Revision ID: 079
-Revises: 078
+Revision ID: 082
+Revises: 081
 Create Date: 2026-08-19
 
 Web Push subscriptions for task due-date reminders — one row per browser/
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "079"
-down_revision: Union[str, None] = "078"
+revision: str = "082"
+down_revision: Union[str, None] = "081"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

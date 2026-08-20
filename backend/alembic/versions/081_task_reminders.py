@@ -1,7 +1,7 @@
 """add due_time and reminder_sent_at to tasks
 
-Revision ID: 078
-Revises: 077
+Revision ID: 081
+Revises: 080
 Create Date: 2026-08-18
 
 Task reminders: due_time is an optional time-of-day paired with the
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "078"
-down_revision: Union[str, None] = "077"
+revision: str = "081"
+down_revision: Union[str, None] = "080"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

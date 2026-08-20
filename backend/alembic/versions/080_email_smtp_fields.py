@@ -1,7 +1,7 @@
 """add smtp fields to email_connections
 
-Revision ID: 077
-Revises: 076
+Revision ID: 080
+Revises: 079
 Create Date: 2026-08-17
 
 Phase 4: sending. IMAP only reads — outgoing mail needs SMTP. These are
@@ -15,8 +15,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "077"
-down_revision: Union[str, None] = "076"
+revision: str = "080"
+down_revision: Union[str, None] = "079"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

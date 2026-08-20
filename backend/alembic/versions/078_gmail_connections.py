@@ -1,7 +1,7 @@
 """add gmail_connections table
 
-Revision ID: 075
-Revises: 074
+Revision ID: 078
+Revises: 077
 Create Date: 2026-08-16
 
 Stores the OAuth2 tokens for a user's linked Gmail account, read-only to
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
-revision: str = "075"
-down_revision: Union[str, None] = "074"
+revision: str = "078"
+down_revision: Union[str, None] = "077"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

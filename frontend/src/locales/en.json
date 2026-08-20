@@ -1392,7 +1392,9 @@
     "recordings": "Recordings",
     "noRecordings": "No recordings found.",
     "loadMore": "Load more",
-    "backToLive": "Back to live view"
+    "backToLive": "Back to live view",
+    "today": "Today",
+    "yesterday": "Yesterday"
   },
   "meetings": {
     "title": "Meetings",

@@ -185,25 +185,36 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                 <p className="text-sm text-muted-foreground">{t('cameras.noRecordings', 'Nenhuma gravação encontrada.')}</p>
               ) : (
                 <>
-                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
-                    {recordings.slice(0, recLimit).map((rec) => (
-                      <button
-                        key={rec.filename}
-                        type="button"
-                        onClick={() => openRecording(rec)}
-                        className="w-full flex items-center gap-3 px-3 py-2 bg-card hover:bg-muted/50 transition-colors text-left"
-                      >
-                        <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm flex-1 min-w-0 truncate">{formatRecordingDate(rec.filename, rec.modified)}</span>
-                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{formatSize(rec.size)}</span>
-                      </button>
+                  <div className="space-y-4">
+                    {groupRecordingsByDay(recordings.slice(0, recLimit), t).map((group) => (
+                      <div key={group.key}>
+                        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                          {group.label}
+                        </div>
+                        <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
+                          {group.items.map((rec) => (
+                            <button
+                              key={rec.filename}
+                              type="button"
+                              onClick={() => openRecording(rec)}
+                              className="w-full flex items-center gap-3 px-3 py-2 bg-card hover:bg-muted/50 transition-colors text-left"
+                            >
+                              <Video className="h-4 w-4 text-muted-foreground shrink-0" />
+                              <span className="text-sm flex-1 min-w-0 truncate">
+                                {formatTimeOfDay(getRecordingDate(rec.filename, rec.modified))}
+                              </span>
+                              <span className="text-xs text-muted-foreground tabular-nums shrink-0">{formatSize(rec.size)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                   {recordings.length > recLimit && (
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-2 w-full"
+                      className="mt-3 w-full"
                       onClick={() => setRecLimit((n) => n + RECORDINGS_PAGE_SIZE)}
                     >
                       {t('cameras.loadMore', 'Carregar mais')} ({recordings.length - recLimit})
@@ -230,11 +241,56 @@ function formatSize(bytes: number): string {
 // `modified` only if a filename doesn't match the expected pattern.
 const RECORDING_FILENAME_TIMESTAMP = /_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})_/
 
-function formatRecordingDate(filename: string, modified: string): string {
+function getRecordingDate(filename: string, modified: string): Date {
   const match = filename.match(RECORDING_FILENAME_TIMESTAMP)
   if (match) {
     const [, date, hh, mm, ss] = match
-    return new Date(`${date}T${hh}:${mm}:${ss}`).toLocaleString()
+    return new Date(`${date}T${hh}:${mm}:${ss}`)
   }
-  return new Date(modified).toLocaleString()
+  return new Date(modified)
+}
+
+function formatTimeOfDay(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+interface RecordingDayGroup {
+  key: string
+  label: string
+  items: CameraRecording[]
+}
+
+/** Groups an already-sorted (newest-first) recordings slice by calendar
+ * day, labeling today/yesterday specially. Grouping only the visible
+ * slice (not the full list) keeps this cheap even with hundreds of clips. */
+function groupRecordingsByDay(
+  recordings: CameraRecording[],
+  t: (key: string, fallback: string) => string,
+): RecordingDayGroup[] {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const todayKey = today.toDateString()
+  const yesterdayKey = yesterday.toDateString()
+
+  const groups: RecordingDayGroup[] = []
+  const byKey = new Map<string, RecordingDayGroup>()
+  for (const rec of recordings) {
+    const date = getRecordingDate(rec.filename, rec.modified)
+    const key = date.toDateString()
+    let group = byKey.get(key)
+    if (!group) {
+      const label =
+        key === todayKey
+          ? t('cameras.today', 'Hoje')
+          : key === yesterdayKey
+            ? t('cameras.yesterday', 'Ontem')
+            : date.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' })
+      group = { key, label, items: [] }
+      byKey.set(key, group)
+      groups.push(group)
+    }
+    group.items.push(rec)
+  }
+  return groups
 }

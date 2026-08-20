@@ -1393,7 +1393,9 @@
     "recordings": "Gravações",
     "noRecordings": "Nenhuma gravação encontrada.",
     "loadMore": "Carregar mais",
-    "backToLive": "Voltar pra câmera ao vivo"
+    "backToLive": "Voltar pra câmera ao vivo",
+    "today": "Hoje",
+    "yesterday": "Ontem"
   },
   "meetings": {
     "title": "Gravação",

@@ -194,7 +194,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                         className="w-full flex items-center gap-3 px-3 py-2 bg-card hover:bg-muted/50 transition-colors text-left"
                       >
                         <Video className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm flex-1 min-w-0 truncate">{formatRecordingDate(rec.modified)}</span>
+                        <span className="text-sm flex-1 min-w-0 truncate">{formatRecordingDate(rec.filename, rec.modified)}</span>
                         <span className="text-xs text-muted-foreground tabular-nums shrink-0">{formatSize(rec.size)}</span>
                       </button>
                     ))}
@@ -223,6 +223,18 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatRecordingDate(iso: string): string {
-  return new Date(iso).toLocaleString()
+// Filenames embed the actual recording start (e.g.
+// "1_2026-08-20_16-36-05_411.mp4"), already in local time — several
+// seconds earlier than `modified`, which is when the server finished
+// writing the file to disk. Prefer the real event time; fall back to
+// `modified` only if a filename doesn't match the expected pattern.
+const RECORDING_FILENAME_TIMESTAMP = /_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})_/
+
+function formatRecordingDate(filename: string, modified: string): string {
+  const match = filename.match(RECORDING_FILENAME_TIMESTAMP)
+  if (match) {
+    const [, date, hh, mm, ss] = match
+    return new Date(`${date}T${hh}:${mm}:${ss}`).toLocaleString()
+  }
+  return new Date(modified).toLocaleString()
 }

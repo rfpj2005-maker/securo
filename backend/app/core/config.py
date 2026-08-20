@@ -125,6 +125,13 @@ class Settings(BaseSettings):
     siprov_api_email: str = ""
     siprov_api_password: SecretStr = SecretStr("")
 
+    # Camera server (Amparar's own recording/NVR box) — reachable over
+    # Tailscale only, not the public internet. Company-wide, not
+    # workspace-scoped: any authenticated Securo user can view it, same as
+    # the siprov_* tools above.
+    camera_api_base_url: str = ""
+    camera_api_key: SecretStr = SecretStr("")
+
     # Google Calendar OAuth2 (view/create/edit events from Securo).
     # Create at console.cloud.google.com: enable the Calendar API, configure
     # the OAuth consent screen, then create a Web application OAuth client

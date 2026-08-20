@@ -1384,6 +1384,16 @@
     "eventUpdated": "Event updated",
     "eventDeleted": "Event deleted"
   },
+  "cameras": {
+    "section": "Security",
+    "title": "Cameras",
+    "subtitle": "Cameras across every location, with live view and recordings.",
+    "empty": "No cameras configured.",
+    "recordings": "Recordings",
+    "noRecordings": "No recordings found.",
+    "loadMore": "Load more",
+    "backToLive": "Back to live view"
+  },
   "meetings": {
     "title": "Meetings",
     "new": "New recording",

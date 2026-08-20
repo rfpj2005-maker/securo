@@ -54,6 +54,7 @@ import {
   Fingerprint,
   CalendarDays,
   Mic,
+  Camera,
 } from 'lucide-react'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { ChangePasswordDialog } from '@/components/change-password-dialog'
@@ -74,6 +75,7 @@ const CUSTOM_NAV_ITEMS: { key: string; path: string; icon: React.ElementType }[]
   { key: 'tasks', path: '/tasks', icon: ListChecks },
   { key: 'calendar', path: '/calendar', icon: CalendarDays },
   { key: 'meetings', path: '/meetings', icon: Mic },
+  { key: 'cameras', path: '/cameras', icon: Camera },
 ]
 
 /** Placeholder rows shown while the workspace's module list is in flight. */

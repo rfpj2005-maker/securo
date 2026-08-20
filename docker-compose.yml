@@ -49,6 +49,8 @@ x-backend-env: &backend-env
   VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
   VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
   VAPID_CLAIM_EMAIL: ${VAPID_CLAIM_EMAIL:-}
+  CAMERA_API_BASE_URL: ${CAMERA_API_BASE_URL:-}
+  CAMERA_API_KEY: ${CAMERA_API_KEY:-}
   STORAGE_LOCAL_PATH: /app/data/attachments
   AGENTS_KNOWLEDGE_STORAGE_PATH: /app/data/agent_knowledge
   # Meeting recordings — audio on disk, transcribed locally by faster-whisper

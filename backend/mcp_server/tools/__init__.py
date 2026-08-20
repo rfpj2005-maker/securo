@@ -20,4 +20,5 @@ from mcp_server.tools import (  # noqa: F401
     gmail,
     email_imap,
     meetings,
+    cameras,
 )

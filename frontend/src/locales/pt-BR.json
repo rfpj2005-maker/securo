@@ -120,6 +120,7 @@
     "siprov": "Siprov",
     "calendar": "Calendário",
     "meetings": "Gravação",
+    "cameras": "Câmeras",
     "splitGroups": "Grupos",
     "goals": "Metas",
     "reports": "Relatórios",
@@ -1383,6 +1384,16 @@
     "eventCreated": "Evento criado",
     "eventUpdated": "Evento atualizado",
     "eventDeleted": "Evento excluído"
+  },
+  "cameras": {
+    "section": "Segurança",
+    "title": "Câmeras",
+    "subtitle": "Câmeras de todas as unidades, com imagem ao vivo e gravações.",
+    "empty": "Nenhuma câmera configurada.",
+    "recordings": "Gravações",
+    "noRecordings": "Nenhuma gravação encontrada.",
+    "loadMore": "Carregar mais",
+    "backToLive": "Voltar pra câmera ao vivo"
   },
   "meetings": {
     "title": "Gravação",

@@ -59,6 +59,8 @@ import type {
   EmailSendResult,
   PushSubscribeKeys,
   PushStatus,
+  Camera,
+  CameraRecording,
   DashboardSummary,
   SpendingByCategory,
   MonthlyTrend,
@@ -1169,6 +1171,32 @@ export const push = {
   test: async (): Promise<{ sent: number }> => {
     const { data } = await api.post('/push/test')
     return data
+  },
+}
+
+// Security cameras — proxied through our backend so the NVR's API key
+// never reaches the browser. Snapshot/recording are binary, so (like
+// transaction attachments) fetched as a blob and handed back as an object
+// URL — the caller must URL.revokeObjectURL() it when done.
+export const cameras = {
+  list: async (): Promise<Camera[]> => {
+    const { data } = await api.get('/cameras')
+    return data
+  },
+  snapshotUrl: async (location: string, cameraId: number): Promise<string> => {
+    const { data } = await api.get(`/cameras/snapshot/${location}/${cameraId}`, { responseType: 'blob' })
+    return URL.createObjectURL(data)
+  },
+  recordings: async (location: string, cameraName: string): Promise<CameraRecording[]> => {
+    const { data } = await api.get(`/cameras/recordings/${location}/${encodeURIComponent(cameraName)}`)
+    return data
+  },
+  recordingUrl: async (location: string, cameraName: string, filename: string): Promise<string> => {
+    const { data } = await api.get(
+      `/cameras/recording/${location}/${encodeURIComponent(cameraName)}/${encodeURIComponent(filename)}`,
+      { responseType: 'blob' },
+    )
+    return URL.createObjectURL(data)
   },
 }
 

@@ -1027,3 +1027,22 @@ export interface CalendarEvent {
   calendar_id: string
   calendar_summary: string | null
 }
+
+export interface Camera {
+  location: string
+  id: number
+  name: string
+  directory: string
+  online: boolean
+  connected: boolean
+  connecting: boolean
+  width: number
+  height: number
+  hasRecordings: boolean
+}
+
+export interface CameraRecording {
+  filename: string
+  size: number
+  modified: string
+}

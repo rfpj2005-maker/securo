@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Edit2, Trash2, Plus, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Edit2, Trash2, Plus, MessageSquare, History } from 'lucide-react'
 import { ConversationRow } from '@/components/agents/conversation-row'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { ChatPanel } from '@/components/agents/chat-panel'
 import { KnowledgeSection } from '@/components/agents/knowledge-section'
 import { ToolsSection } from '@/components/agents/tools-section'
 import { useWorkspace } from '@/contexts/workspace-context'
+import { cn } from '@/lib/utils'
 
 // Remembers the last-active conversation per agent, the same way the
 // global chat panel does. Without this, navigating away from this page
@@ -46,6 +47,10 @@ export default function AgentDetailPage() {
   const qc = useQueryClient()
   const { canWrite } = useWorkspace()
   const [editOpen, setEditOpen] = useState(false)
+  // Conversation history is a slide-over on mobile (there's no room for a
+  // permanent 64-wide sidebar below the md breakpoint), a static sidebar
+  // from md up.
+  const [conversationsOpen, setConversationsOpen] = useState(false)
   const [conversationId, setConversationIdState] = useState<string | null>(() => readLastConversation(id))
   // Increments on every sidebar click so the chat input refocuses even
   // when the conversation id didn't actually change (e.g. clicking "+"
@@ -55,6 +60,7 @@ export default function AgentDetailPage() {
     setConversationIdState(cid)
     writeLastConversation(id, cid)
     setFocusSignal((n) => n + 1)
+    setConversationsOpen(false)
   }
   // The lazy useState initializer above only runs on the very first mount.
   // Navigating between two different agents' dedicated pages reuses this
@@ -112,7 +118,7 @@ export default function AgentDetailPage() {
     // overflow-hidden ensures only the messages div inside ChatPanel scrolls.
     <div className="flex flex-col h-[calc(100dvh-6.5rem)] lg:h-[calc(100dvh-3rem)] overflow-hidden">
       <div className="border-b px-4 py-3 flex items-center gap-3">
-        <Button size="icon" variant="ghost" onClick={() => navigate('/agents')} title={t('common.back')} aria-label={t('common.back')}>
+        <Button size="icon" variant="ghost" className="shrink-0" onClick={() => navigate('/agents')} title={t('common.back')} aria-label={t('common.back')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div
@@ -127,21 +133,34 @@ export default function AgentDetailPage() {
             {providerLabel} · {modelLabel} · temp {agent.temperature}
           </div>
         </div>
+        {/* Conversation history toggle — only needed below md, where the
+            sidebar in the chat tab is a slide-over instead of always visible. */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="md:hidden shrink-0"
+          onClick={() => setConversationsOpen(true)}
+          title={t('agents.detail.conversations')}
+          aria-label={t('agents.detail.conversations')}
+        >
+          <History className="h-4 w-4" />
+        </Button>
         {canWrite && (
           <>
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-              <Edit2 className="h-3.5 w-3.5 mr-1.5" /> {t('agents.detail.edit')}
+            <Button size="sm" variant="outline" className="shrink-0 px-2 sm:px-3" onClick={() => setEditOpen(true)}>
+              <Edit2 className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t('agents.detail.edit')}</span>
             </Button>
             <Button
               size="sm"
               variant="outline"
+              className="shrink-0 px-2 sm:px-3"
               onClick={() => {
                 if (confirm(t('agents.detail.deleteConfirm'))) {
                   removeMut.mutate()
                 }
               }}
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t('agents.detail.delete')}
+              <Trash2 className="h-3.5 w-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">{t('agents.detail.delete')}</span>
             </Button>
           </>
         )}
@@ -156,8 +175,22 @@ export default function AgentDetailPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="chat" className="flex-1 flex min-h-0 mt-3">
-          <aside className="hidden md:flex md:w-64 border-r flex-col min-h-0">
+        <TabsContent value="chat" className="flex-1 flex min-h-0 mt-3 relative">
+          {/* Mobile backdrop — tapping it closes the slide-over, same
+              pattern as the app's main sidebar overlay. */}
+          {conversationsOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/50 md:hidden"
+              onClick={() => setConversationsOpen(false)}
+            />
+          )}
+          <aside
+            className={cn(
+              'flex flex-col min-h-0 border-r bg-card',
+              'fixed inset-y-0 left-0 z-50 w-64 transform transition-transform md:static md:z-auto md:w-64 md:translate-x-0',
+              conversationsOpen ? 'translate-x-0' : '-translate-x-full',
+            )}
+          >
             <div className="px-3 pt-2 pb-1 flex items-center justify-between shrink-0">
               <span className="text-xs uppercase tracking-wider text-muted-foreground">{t('agents.detail.conversations')}</span>
               <Button size="icon" variant="ghost" onClick={() => pickConversation(null)} title={t('agents.detail.newConversation')}>

@@ -2,15 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ShellLogo } from '@/components/shell-logo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Send, Sparkles, AlertCircle, Mic, Square } from 'lucide-react'
+import { Loader2, Send, Sparkles, AlertCircle, Mic, Square, Car, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { agents } from '@/lib/api'
 import type { Agent, AgentMessage } from '@/lib/api'
 import { streamChat, type AgentStreamEvent } from '@/lib/agents-stream'
 import { Markdown } from '@/components/agents/markdown'
-import { ToolDebugChip } from '@/components/agents/tool-debug-chip'
 import { ProposalCard, isProposalData, isProposalToolName } from '@/components/agents/proposal-card'
 import { useSpeechRecognition } from '@/hooks/use-speech-recognition'
+import { useSpeechSynthesis } from '@/hooks/use-speech-synthesis'
+import { toSpeechText } from '@/lib/speech-text'
+import { cn } from '@/lib/utils'
 
 interface Props {
   agent: Agent
@@ -49,10 +51,65 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const speech = useSpeechRecognition('pt-BR')
+  const synth = useSpeechSynthesis('pt-BR')
   // Whether the user is "pinned" to the bottom of the scroll area. We
   // only auto-scroll while pinned — if the user scrolls up to read,
   // streaming deltas no longer yank them back down.
   const isAtBottomRef = useRef(true)
+
+  // Hands-free loop (mic in car icon): listen → auto-send on silence →
+  // speak the reply → listen again, until the user taps it off. Mirrored
+  // into a ref because the streamChat callbacks and the speech-recognition
+  // effect below close over stale state otherwise.
+  const [voiceMode, setVoiceMode] = useState(false)
+  const voiceModeRef = useRef(false)
+  const prevListeningRef = useRef(false)
+  const setVoiceModeActive = (on: boolean) => {
+    voiceModeRef.current = on
+    setVoiceMode(on)
+  }
+
+  const exitVoiceMode = () => {
+    setVoiceModeActive(false)
+    speech.stop()
+    synth.stop()
+  }
+
+  const toggleVoiceMode = () => {
+    if (voiceMode) {
+      exitVoiceMode()
+      return
+    }
+    setVoiceModeActive(true)
+    speech.start()
+  }
+
+  // Recognition naturally stops after a pause (continuous=false) — that's
+  // our cue to auto-send whatever was captured, or to just listen again if
+  // it stopped on pure silence (no-speech timeout, stray mic bump, etc).
+  useEffect(() => {
+    const wasListening = prevListeningRef.current
+    prevListeningRef.current = speech.listening
+    if (!wasListening || speech.listening) return
+    if (!voiceModeRef.current || streaming || synth.speaking) return
+    const text = speech.transcript.trim()
+    if (text) {
+      send(text)
+    } else {
+      speech.start()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speech.listening])
+
+  // Stop everything on unmount (switching agents/conversations remounts
+  // this component via the `key={activeAgent.id}` in both chat surfaces).
+  useEffect(() => {
+    return () => {
+      speech.stop()
+      synth.stop()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: history } = useQuery({
     queryKey: ['agent-conv-messages', conversationId],
@@ -121,8 +178,8 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
     isAtBottomRef.current = distance < 80
   }
 
-  const send = async () => {
-    const trimmed = input.trim()
+  const send = async (overrideText?: string) => {
+    const trimmed = (overrideText ?? input).trim()
     if (!trimmed || streaming) return
     setInput('')
     setLastError(null)
@@ -130,6 +187,9 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
     // User just took an action — they want to see the response.
     isAtBottomRef.current = true
     let errorThisTurn: string | null = null
+    // Assembled outside React state so the voice-mode TTS step below has
+    // the exact final text without racing setDraft's async updates.
+    let assembledText = ''
     // Track the active conversation id locally — the React state for it
     // updates asynchronously, so a closure over `conversationId` still
     // sees the value at the start of send() and would invalidate the
@@ -155,6 +215,7 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
             return
           }
           if (ev.kind === 'text_delta') {
+            assembledText += ev.text
             setDraft((d) => (d ? { ...d, text: d.text + ev.text } : d))
           } else if (ev.kind === 'tool_call') {
             setDraft((d) => (d ? { ...d, tools: [...d.tools, { name: ev.tool_name, args: ev.tool_args }] } : d))
@@ -204,6 +265,17 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
           .then(() => qc.invalidateQueries({ queryKey: ['agent-conversations'] }))
           .catch(() => {})
       }
+      // Voice mode: read the reply aloud, then listen for the next turn.
+      // Silent no-op if the user toggled voice mode off mid-response.
+      if (voiceModeRef.current) {
+        if (!errorThisTurn && assembledText.trim()) {
+          synth.speak(toSpeechText(assembledText), () => {
+            if (voiceModeRef.current) speech.start()
+          })
+        } else {
+          speech.start()
+        }
+      }
     }
   }
 
@@ -248,26 +320,22 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
         )}
         {draft && (
           <div className="space-y-2">
+            {/* End users don't need to see raw tool-call traffic (which
+                server queries ran, JSON payloads, etc) — only proposals,
+                since those carry an Apply button and are a real decision
+                the user needs to make. Everything else stays silent; the
+                "thinking" spinner below is the only feedback while tools
+                run with no visible text yet. */}
             {draft.tools.map((tool, i) => {
-              const isProposal = isProposalToolName(tool.name) && tool.result?.data && isProposalData(tool.result.data)
-              if (isProposal) {
-                // Stable id for the localStorage "applied" marker — the
-                // draft uses an in-flight uuid so we suffix with the index.
-                return (
-                  <ProposalCard
-                    key={i}
-                    toolCallId={`draft-${draft.id}-${i}`}
-                    data={tool.result!.data as Record<string, unknown>}
-                  />
-                )
-              }
+              const isProposal = isProposalToolName(tool.name) && !!tool.result?.data && isProposalData(tool.result.data)
+              if (!isProposal) return null
+              // Stable id for the localStorage "applied" marker — the
+              // draft uses an in-flight uuid so we suffix with the index.
               return (
-                <ToolDebugChip
+                <ProposalCard
                   key={i}
-                  name={tool.name}
-                  args={tool.args}
-                  result={tool.result || null}
-                  pending={!tool.result}
+                  toolCallId={`draft-${draft.id}-${i}`}
+                  data={tool.result!.data as Record<string, unknown>}
                 />
               )
             })}
@@ -305,6 +373,26 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
           </div>
         )}
       </div>
+      {voiceMode && (
+        <div className="shrink-0 px-3 py-1.5 border-t bg-muted/50 flex items-center gap-1.5 text-xs text-muted-foreground">
+          {synth.speaking ? (
+            <>
+              <Volume2 className="h-3.5 w-3.5 animate-pulse text-primary" />
+              {t('agents.chat.voiceModeSpeaking', 'Speaking…')}
+            </>
+          ) : streaming ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t('agents.chat.voiceModeThinking', 'Thinking…')}
+            </>
+          ) : (
+            <>
+              <Mic className="h-3.5 w-3.5 animate-pulse text-primary" />
+              {t('agents.chat.voiceModeListening', 'Listening…')}
+            </>
+          )}
+        </div>
+      )}
       <div className="shrink-0 border-t p-3 flex items-end gap-2 bg-background">
         <textarea
           ref={inputRef}
@@ -331,19 +419,31 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
             }
           }}
         />
+        {speech.supported && synth.supported && (
+          <Button
+            type="button"
+            variant={voiceMode ? 'destructive' : 'outline'}
+            onClick={toggleVoiceMode}
+            className={cn('shrink-0', voiceMode && 'animate-pulse')}
+            aria-label={voiceMode ? t('agents.chat.voiceModeStop', 'Turn off voice mode') : t('agents.chat.voiceModeStart', 'Turn on voice mode')}
+            title={voiceMode ? t('agents.chat.voiceModeStop', 'Turn off voice mode') : t('agents.chat.voiceModeStart', 'Turn on voice mode — hands-free, good for driving')}
+          >
+            <Car className="h-4 w-4" />
+          </Button>
+        )}
         {speech.supported && (
           <Button
             type="button"
             variant={speech.listening ? 'destructive' : 'outline'}
             onClick={() => (speech.listening ? speech.stop() : speech.start())}
-            disabled={streaming}
+            disabled={streaming || voiceMode}
             className="shrink-0"
             aria-label={speech.listening ? t('agents.chat.voiceStop') : t('agents.chat.voiceStart')}
           >
             {speech.listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
         )}
-        <Button onClick={send} disabled={streaming || !input.trim()} className="shrink-0">
+        <Button onClick={() => send()} disabled={streaming || !input.trim()} className="shrink-0">
           {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
@@ -386,31 +486,15 @@ function HistoryView({ agent, history }: { agent: Agent; history: AgentMessage[]
           if (m.role === 'assistant') {
             return (
               <div key={m.id} className="space-y-2">
+                {/* End users don't need to see raw tool-call traffic — only
+                    proposals, which carry an Apply button. */}
                 {m.tool_calls?.map((tc) => {
                   const tres = resultsById[tc.id]
                   const data = tres?.tool_result?.data
-                  if (isProposalToolName(tc.name) && data && isProposalData(data)) {
-                    // Persisted tool_call_id is stable across reloads —
-                    // perfect localStorage key for the "applied" marker.
-                    return <ProposalCard key={tc.id} toolCallId={tc.id} data={data as Record<string, unknown>} />
-                  }
-                  return (
-                    <ToolDebugChip
-                      key={tc.id}
-                      name={tc.name}
-                      args={tc.arguments}
-                      result={
-                        tres
-                          ? {
-                              ok: tres.tool_result?.ok ?? false,
-                              data: tres.tool_result?.data,
-                              text: tres.content,
-                            }
-                          : null
-                      }
-                      pending={!tres}
-                    />
-                  )
+                  if (!isProposalToolName(tc.name) || !data || !isProposalData(data)) return null
+                  // Persisted tool_call_id is stable across reloads —
+                  // perfect localStorage key for the "applied" marker.
+                  return <ProposalCard key={tc.id} toolCallId={tc.id} data={data as Record<string, unknown>} />
                 })}
                 {m.content && (
                   <div className="rounded-lg px-3 py-2 bg-muted">

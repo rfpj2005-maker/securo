@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow, parseISO } from 'date-fns'
@@ -6,7 +6,7 @@ import { meetings as meetingsApi } from '@/lib/api'
 import { toast } from 'sonner'
 import { useDateLocale } from '@/hooks/use-display-locale'
 import { resolveDateFnsLocale } from '@/lib/date-fns-locale'
-import { useMeetingRecorder, type RecordSource } from '@/hooks/use-meeting-recorder'
+import { useMeetingRecording, type RecordSource } from '@/contexts/meeting-recording-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,6 +53,18 @@ export default function MeetingsPage() {
   const [newOpen, setNewOpen] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
   const [meetingToDelete, setMeetingToDelete] = useState<string | null>(null)
+  const activeRecording = useMeetingRecording()
+
+  // Recording lives in a context above <Outlet /> so it survives navigating
+  // away and back — reopen the dialog automatically so an in-progress or
+  // just-finished recording is where the user expects it, instead of
+  // silently sitting in context with no visible UI.
+  useEffect(() => {
+    if (activeRecording.recording || activeRecording.pendingBlob) {
+      setNewOpen(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: list, isLoading } = useQuery({
     queryKey: ['meetings'],
@@ -181,18 +193,15 @@ export default function MeetingsPage() {
 function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: (id: string) => void }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const recorder = useMeetingRecorder()
-  const [title, setTitle] = useState('')
-  const [meetingType, setMeetingType] = useState<MeetingType>('in_person')
-  const [includeMic, setIncludeMic] = useState(true)
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
+  const recorder = useMeetingRecording()
+  const { title, meetingType, includeMic } = recorder.meta
+  const setTitle = (v: string) => recorder.setMeta({ title: v })
+  const setMeetingType = (v: MeetingType) => recorder.setMeta({ meetingType: v })
+  const setIncludeMic = (v: boolean) => recorder.setMeta({ includeMic: v })
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
 
   const reset = () => {
-    setTitle('')
-    setMeetingType('in_person')
-    setIncludeMic(true)
-    setRecordedBlob(null)
+    recorder.resetAll()
     setUploadedFile(null)
   }
 
@@ -201,7 +210,7 @@ function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; on
       meetingsApi.upload({
         title: title.trim() || t('meetings.untitled'),
         meeting_type: meetingType,
-        file: (uploadedFile ?? recordedBlob) as File | Blob,
+        file: (uploadedFile ?? recorder.pendingBlob) as File | Blob,
         filename: uploadedFile?.name,
       }),
     onSuccess: (meeting) => {
@@ -218,12 +227,11 @@ function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; on
 
   const handleToggleRecord = async () => {
     if (recorder.recording) {
-      const blob = await recorder.stop()
-      if (blob) setRecordedBlob(blob)
+      await recorder.stop()
       return
     }
     setUploadedFile(null)
-    setRecordedBlob(null)
+    recorder.clearPending()
     try {
       await recorder.start(source, includeMic)
     } catch {
@@ -231,12 +239,22 @@ function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; on
     }
   }
 
-  const pendingAudio = uploadedFile ?? recordedBlob
+  const pendingAudio = uploadedFile ?? recorder.pendingBlob
   const minutes = Math.floor(recorder.elapsedSeconds / 60)
   const seconds = recorder.elapsedSeconds % 60
 
+  // Shared by the dialog's own close paths (X, Escape, backdrop click) and
+  // the Cancel button. Closing while actively recording just hides the
+  // dialog — the recording lives in context and keeps going in the
+  // background (RecordingPill stays visible app-wide). Only discard the
+  // title/blob when there's nothing still in flight to lose.
+  const handleOpenChange = (v: boolean) => {
+    onOpenChange(v)
+    if (!v && !recorder.recording) reset()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!recorder.recording) { onOpenChange(v); if (!v) reset() } }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('meetings.new')}</DialogTitle>
@@ -325,7 +343,7 @@ function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; on
                 const f = e.target.files?.[0]
                 if (f) {
                   setUploadedFile(f)
-                  setRecordedBlob(null)
+                  recorder.clearPending()
                 }
               }}
               className="w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-secondary-foreground hover:file:bg-secondary/80"
@@ -335,8 +353,8 @@ function NewMeetingDialog({ open, onOpenChange, onCreated }: { open: boolean; on
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={recorder.recording}>
-            {t('common.cancel')}
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+            {recorder.recording ? t('meetings.continueInBackground', 'Continue in background') : t('common.cancel')}
           </Button>
           <Button
             disabled={!pendingAudio || recorder.recording || uploadMutation.isPending}

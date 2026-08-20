@@ -92,7 +92,7 @@ export default function CalendarPage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const [viewMode, setViewMode] = useState<ViewMode>('week')
+  const [viewMode, setViewMode] = useState<ViewMode>('3day')
   const [viewDate, setViewDate] = useState(new Date())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)

@@ -28,23 +28,25 @@ const PERSONAL_MODULES: ModuleId[] = [
 ]
 
 const linkKeys = (items: NavItem[]) =>
-  items.filter((i) => i.type === 'link').map((i) => i.key)
+  items.flatMap((i) => (i.type === 'group' ? i.items.map((c) => c.key) : i.type === 'link' ? [i.key] : []))
+
+const allLinks = (items: NavItem[]) =>
+  items.flatMap((i) => (i.type === 'group' ? i.items : i.type === 'link' ? [i] : []))
 
 describe('nav catalog', () => {
   it('maps every link to a known module', () => {
-    for (const item of navItems) {
-      if (item.type !== 'link') continue
+    for (const item of allLinks(navItems)) {
       expect(MODULE_IDS).toContain(item.module)
     }
   })
 
   it('has a link for every module in the catalog', () => {
-    const covered = navItems.filter((i) => i.type === 'link').map((i) => i.module)
+    const covered = allLinks(navItems).map((i) => i.module)
     expect([...covered].sort()).toEqual([...MODULE_IDS].sort())
   })
 
   it('gives every link a distinct module', () => {
-    const covered = navItems.filter((i) => i.type === 'link').map((i) => i.module)
+    const covered = allLinks(navItems).map((i) => i.module)
     expect(new Set(covered).size).toBe(covered.length)
   })
 })
@@ -66,8 +68,9 @@ describe('visibleNavItems', () => {
       'splitGroups',
       'rules',
     ])
-    // All three section headers survive.
-    expect(personal.filter((i) => i.type === 'separator')).toHaveLength(3)
+    // Everything money-related lives under the single "Finanças" group.
+    expect(personal).toHaveLength(1)
+    expect(personal[0]).toMatchObject({ type: 'group', key: 'finances' })
   })
 
   it('adds invoices for a workspace that has it', () => {
@@ -91,11 +94,11 @@ describe('visibleNavItems', () => {
     ])
   })
 
-  it('keeps a section header while any of its links remain', () => {
+  it('keeps the finances group while any of its links remain', () => {
     const result = visibleNavItems(navItems, allExcept('transactions', 'invoices'))
-    const labels = result.filter((i) => i.type === 'separator').map((i) => i.labelKey)
-    expect(labels).toContain('nav.groupAccounts')
+    expect(result.filter((i) => i.type === 'group')).toHaveLength(1)
     expect(linkKeys(result)).toContain('accounts')
+    expect(linkKeys(result)).not.toContain('transactions')
   })
 
   it('drops every header when no module is on', () => {

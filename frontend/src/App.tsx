@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/contexts/auth-context'
 import { WorkspaceProvider } from '@/contexts/workspace-context'
 import { CollectionFilterProvider } from '@/contexts/collection-filter-context'
+import { MeetingRecordingProvider } from '@/contexts/meeting-recording-context'
 import { ProtectedRoute } from '@/components/protected-route'
 import { AdminRoute } from '@/components/admin-route'
 import { AgentsRoute } from '@/components/agents-route'
@@ -78,7 +79,9 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <CollectionFilterProvider>
-                        <AppLayout />
+                        <MeetingRecordingProvider>
+                          <AppLayout />
+                        </MeetingRecordingProvider>
                       </CollectionFilterProvider>
                     </ProtectedRoute>
                   }

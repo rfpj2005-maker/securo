@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { getAccountName } from '@/lib/account-utils'
+import { getAccountName, formatAccountMask } from '@/lib/account-utils'
 import { currentMonth, shiftMonth, monthLastDay, monthLabel, monthRange } from '@/lib/month-utils'
+import { localDateString } from '@/lib/date-utils'
 import { useTranslation } from 'react-i18next'
 import { useDisplayLocale, useDateLocale } from '@/hooks/use-display-locale'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { dashboard, transactions, budgets, categories as categoriesApi, categoryGroups as categoryGroupsApi, accounts as accountsApi, goals as goalsApi, groups as groupsApi, payees as payeesApi, rules as rulesApi } from '@/lib/api'
 import { invalidateFinancialQueries } from '@/lib/invalidate-queries'
@@ -41,7 +42,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ICON_MAP } from '@/lib/category-icons'
 import { PageHeader } from '@/components/page-header'
 import { CategoryIcon } from '@/components/category-icon'
-import { AccountIcon } from '@/components/account-icon'
+import { AccountIcon, getAccountTypeConfig } from '@/components/account-icon'
 import { TransactionDrillDown, type DrillDownFilter } from '@/components/transaction-drill-down'
 import { TransactionDialog, extractApiError, type TransactionSavePayload } from '@/components/transaction-dialog'
 import { RuleDialog, type RuleDialogInitialData } from '@/components/rule-dialog'
@@ -50,12 +51,64 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useAuth } from '@/contexts/auth-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
 import { resolveDateFnsLocale } from '@/lib/date-fns-locale'
-import type { Rule, Transaction } from '@/types'
+import type { Rule, Transaction, Account } from '@/types'
 import { formatCurrency } from '@/lib/format'
 import { shouldShowPendingBadge } from '@/lib/transaction-status'
 
 function formatDate(dateStr: string, locale = 'pt-BR') {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString(locale)
+}
+
+// Mirrors accounts.tsx's local helper — days between today and a
+// YYYY-MM-DD due date, used for the credit card "vence em N dias" hint.
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dateStr + 'T00:00:00')
+  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate()
+}
+
+// Ported from account-detail.tsx's local helper of the same name — the
+// [start, end] of the billing cycle containing `reference`. Without a
+// statement_close_day (Pluggy often doesn't expose it) there's no cycle
+// boundary to compute, so it falls back to "last month through today".
+function creditCardCycleBoundaries(
+  closeDay: number | null | undefined,
+  reference: Date,
+): { start: string; end: string } {
+  if (!closeDay) {
+    const y = reference.getFullYear()
+    const m = reference.getMonth()
+    return {
+      start: format(new Date(y, m - 1, 1), 'yyyy-MM-dd'),
+      end: format(reference, 'yyyy-MM-dd'),
+    }
+  }
+  const ref0 = new Date(reference)
+  ref0.setHours(0, 0, 0, 0)
+  const y = ref0.getFullYear()
+  const m = ref0.getMonth()
+  const clamp = (yy: number, mm: number) => Math.min(closeDay, daysInMonth(yy, mm))
+  const thisMonthClose = new Date(y, m, clamp(y, m))
+  let nextClose: Date
+  if (thisMonthClose.getTime() > ref0.getTime()) {
+    nextClose = thisMonthClose
+  } else {
+    const nextY = m === 11 ? y + 1 : y
+    const nextM = m === 11 ? 0 : m + 1
+    nextClose = new Date(nextY, nextM, clamp(nextY, nextM))
+  }
+  const end = new Date(nextClose)
+  end.setDate(end.getDate() - 1)
+  const prevY = nextClose.getMonth() === 0 ? nextClose.getFullYear() - 1 : nextClose.getFullYear()
+  const prevM = nextClose.getMonth() === 0 ? 11 : nextClose.getMonth() - 1
+  const start = new Date(prevY, prevM, clamp(prevY, prevM))
+  return { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') }
 }
 
 function parseHashtags(notes: string | null): string[] {
@@ -232,6 +285,90 @@ export default function DashboardPage() {
     queryKey: ['accounts'],
     queryFn: () => accountsApi.list(),
   })
+
+  // Top-of-page snapshot: a hand-picked set of accounts in a fixed order,
+  // per the user's own priority list — not "all accounts" (that's the
+  // Contas card further down). 'loan' is the Maçonaria financing, tracked
+  // as a manual credit_card account with future-dated "Parcela N/20" rows
+  // instead of real provider bills, so its due date comes from the next
+  // unpaid installment transaction rather than account.next_due_date.
+  const LOAN_ACCOUNT_ID = '7cf3d34e-4470-42e5-8fb3-d452b6fd9b8b'
+  const TOP_ACCOUNTS_ORDER: { id: string; kind: 'balance' | 'card' | 'loan' }[] = [
+    { id: '1b54a3c8-dcdb-4b40-9abf-5917cf480c39', kind: 'balance' }, // Nu Pagamentos — conta corrente
+    { id: '0a310719-a59b-4c0b-9c06-f9101e15f9d5', kind: 'balance' }, // Banco Santander — conta corrente
+    { id: 'c34fa75b-b4f7-4bc7-a7eb-d7d6ee38841d', kind: 'card' }, // platinum (Nubank)
+    { id: 'ed6346ae-78dc-42b5-b5cd-dd835ec731b1', kind: 'card' }, // Santander •••• 2310
+    { id: '4207a13d-21dc-4876-8bab-27a43da49fa2', kind: 'card' }, // Mercado Pago (cartão)
+    { id: 'dea0e6e3-ab07-4f62-bebc-332845f496d1', kind: 'balance' }, // Carteira
+    { id: LOAN_ACCOUNT_ID, kind: 'loan' }, // Empréstimo Maçonaria
+  ]
+  const topAccountRows = TOP_ACCOUNTS_ORDER
+    .map((row) => {
+      const acc = accountsList?.find((a) => a.id === row.id)
+      return acc ? { ...row, account: acc } : null
+    })
+    .filter((row): row is { id: string; kind: 'balance' | 'card' | 'loan'; account: Account } => row !== null)
+
+  const { data: nextInstallment } = useQuery({
+    queryKey: ['transactions', 'next-installment', LOAN_ACCOUNT_ID],
+    queryFn: () =>
+      transactions.list({
+        account_id: LOAN_ACCOUNT_ID,
+        from: localDateString(),
+        sort_by: 'date',
+        sort_dir: 'asc',
+        limit: 1,
+      }),
+    enabled: topAccountRows.some((r) => r.id === LOAN_ACCOUNT_ID),
+  })
+  const nextInstallmentTx = nextInstallment?.items[0] ?? null
+
+  // The card rows' "próxima fatura" is NOT account.current_balance (that's
+  // total debt, incl. installment purchases due on later cycles) — it's
+  // either the next real bill from the provider's bills feed, or, when
+  // that bill hasn't closed yet, the running total of unbilled charges for
+  // the in-progress cycle (mirrors account-detail.tsx's "Total da fatura").
+  const cardRows = topAccountRows.filter((r) => r.kind === 'card')
+  const today = localDateString()
+
+  const billsQueries = useQueries({
+    queries: cardRows.map((r) => ({
+      queryKey: ['accounts', r.id, 'bills', 'dashboard-top'],
+      queryFn: () => accountsApi.bills(r.id, 3),
+    })),
+  })
+
+  const cycleQueries = useQueries({
+    queries: cardRows.map((r, i) => {
+      const bills = [...(billsQueries[i]?.data ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date))
+      const upcomingBill = bills.find((b) => b.due_date >= today)
+      const { start, end } = creditCardCycleBoundaries(r.account.statement_close_day, new Date())
+      return {
+        queryKey: ['accounts', r.id, 'summary', 'unbilled-cycle', start, end],
+        queryFn: () => accountsApi.summary(r.id, start, end, undefined, true),
+        enabled: !upcomingBill,
+      }
+    }),
+  })
+
+  const nextBillByAccountId = useMemo(() => {
+    const map = new Map<string, { amount: number; currency: string; dueDate: string | null }>()
+    cardRows.forEach((r, i) => {
+      const bills = [...(billsQueries[i]?.data ?? [])].sort((a, b) => a.due_date.localeCompare(b.due_date))
+      const upcomingBill = bills.find((b) => b.due_date >= today)
+      if (upcomingBill) {
+        map.set(r.id, { amount: upcomingBill.total_amount, currency: r.account.currency, dueDate: upcomingBill.due_date })
+      } else {
+        const cycleSummary = cycleQueries[i]?.data
+        map.set(r.id, {
+          amount: cycleSummary ? Number(cycleSummary.monthly_expenses_primary ?? cycleSummary.monthly_expenses) : 0,
+          currency: r.account.currency,
+          dueDate: r.account.next_due_date,
+        })
+      }
+    })
+    return map
+  }, [cardRows, billsQueries, cycleQueries, today])
 
   const { data: payeesList } = useQuery({
     queryKey: ['payees'],
@@ -435,20 +572,7 @@ export default function DashboardPage() {
   const currentLatestBalance = lastCurrentPoint?.current ?? 0
   const monthVariation = currentLatestBalance - currentStartBalance
 
-  const primaryCurrency = summary?.primary_currency ?? userCurrency
   const totalBalance = summary?.total_balance_primary ?? Object.values(summary?.total_balance ?? {}).reduce((a, b) => a + Number(b), 0)
-
-
-  // Savings rate & projection
-  const income = Number(summary?.monthly_income_primary ?? summary?.monthly_income ?? 0)
-  const expenses = Number(summary?.monthly_expenses_primary ?? summary?.monthly_expenses ?? 0)
-  const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0
-  const isCurrentMonth = selectedMonth === currentMonth()
-  const daysElapsed = isCurrentMonth ? new Date().getDate() : monthLastDay(selectedMonth)
-  const daysInMonth = monthLastDay(selectedMonth)
-  const projectedSpend = expenses > 0 && isCurrentMonth && daysElapsed > 0
-    ? (expenses / daysElapsed) * daysInMonth
-    : null
 
   // Uncategorized data
   const uncategorizedCount = summary?.pending_categorization ?? 0
@@ -609,19 +733,6 @@ export default function DashboardPage() {
   const pagedRows = allDisplayRows.slice((txPage - 1) * txPerPage, txPage * txPerPage)
   const txListLoading = currentTxLoading || projectedTxLoading
 
-  // Savings rate display
-  const savingsRateColor = income === 0 && expenses > 0
-    ? 'text-rose-500'
-    : savingsRate > 0
-      ? 'text-emerald-600'
-      : savingsRate < 0
-        ? 'text-rose-500'
-        : 'text-muted-foreground'
-
-  const savingsRateDisplay = income === 0 && expenses > 0
-    ? '---'
-    : `${savingsRate.toFixed(0)}%`
-
   return (
     <div>
       {/* Header */}
@@ -665,172 +776,121 @@ export default function DashboardPage() {
         }
       />
 
-      {/* Hero Card: Savings Rate + Uncategorized CTA */}
-      <div className="bg-card rounded-xl border border-border shadow-sm mb-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3">
-          {/* Left: Savings Rate & Metrics */}
-          <div className="lg:col-span-2 px-5 py-4">
-            <div className="flex items-baseline gap-3 mb-3">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('dashboard.savingsRate')}</p>
-                {summaryLoading ? (
-                  <Skeleton className="h-10 w-28" />
-                ) : (
-                  <p className={`text-4xl font-bold tabular-nums leading-tight ${savingsRateColor}`}>
-                    {savingsRateDisplay}
-                  </p>
-                )}
-              </div>
-            </div>
+      {/* Top snapshot: a fixed, hand-picked account order (not the full
+          account list — see the Contas card below for that). */}
+      {topAccountRows.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm mb-5">
+          <div className="divide-y divide-border">
+            {topAccountRows.map(({ id, kind, account: acc }) => {
+              const cfg = getAccountTypeConfig(acc.type)
+              const accountMask = formatAccountMask(acc)
 
-            <div className="flex flex-wrap gap-6">
-              {/* Balance */}
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-muted-foreground mb-0.5 flex items-center gap-1">
-                  {t('dashboard.totalBalance')}
-                  <span title={t('dashboard.totalBalanceTooltip')} className="inline-flex cursor-help">
-                    <HelpCircle className="h-3 w-3 text-muted-foreground/60" />
-                  </span>
-                </p>
-                {summaryLoading ? (
-                  <Skeleton className="h-7 w-24" />
-                ) : (
-                  <div>
-                    <p className={`text-lg font-bold tabular-nums ${totalBalance < 0 ? 'text-rose-500' : 'text-foreground'}`}>
-                      {mask(formatCurrency(totalBalance, primaryCurrency, locale))}
+              if (kind === 'loan') {
+                const installmentMatch = nextInstallmentTx?.description.match(/(\d+)\/(\d+)/)
+                return (
+                  <Link key={id} to={`/accounts/${acc.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50 transition-colors">
+                    <AccountIcon account={acc} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">{getAccountName(acc)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('dashboard.nextInstallment', { defaultValue: 'Próxima parcela' })}
+                        {installmentMatch && <> · {installmentMatch[0]}</>}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {nextInstallmentTx ? (
+                        <>
+                          <p className="text-sm font-semibold tabular-nums text-rose-500">
+                            {mask(formatCurrency(Number(nextInstallmentTx.amount), nextInstallmentTx.currency, locale))}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground tabular-nums">
+                            {formatDate(nextInstallmentTx.date, locale)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{t('dashboard.noInstallments', { defaultValue: 'Sem parcelas futuras' })}</p>
+                      )}
+                    </div>
+                  </Link>
+                )
+              }
+
+              const isCC = kind === 'card'
+              const nextBill = isCC ? nextBillByAccountId.get(id) : null
+              const bal = isCC ? (nextBill?.amount ?? 0) : Number(acc.current_balance)
+              const dueDate = isCC ? nextBill?.dueDate ?? null : null
+              const dueIn = dueDate ? daysUntil(dueDate) : null
+              const dueText =
+                dueIn == null ? null
+                  : dueIn < 0 ? t('accounts.overdue')
+                  : dueIn === 0 ? t('accounts.dueToday')
+                  : t('accounts.dueIn', { count: dueIn })
+              const dueClass = dueIn != null && dueIn <= 3 ? 'text-amber-600' : 'text-muted-foreground'
+              return (
+                <Link key={id} to={`/accounts/${acc.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50 transition-colors">
+                  <AccountIcon account={acc} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{getAccountName(acc)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isCC ? t('dashboard.nextCardBill', { defaultValue: 'Próxima fatura' }) : t(cfg.label)}
+                      {accountMask && <> · <span className="tabular-nums">{accountMask}</span></>}
+                      {dueText && <> · <span className={dueClass}>{dueText}</span></>}
                     </p>
-                    {/* Per-currency breakdown when multiple currencies */}
-                    {summary?.total_balance && Object.keys(summary.total_balance).length > 1 && (
-                      <div className="flex flex-wrap items-baseline gap-x-1.5 mt-0.5">
-                        <span className="text-[10px] text-muted-foreground/70">{t('dashboard.byCurrency')}</span>
-                        {Object.entries(summary.total_balance).map(([cur, val]) => (
-                          <span key={cur} className="text-[10px] text-muted-foreground tabular-nums">
-                            {mask(formatCurrency(val, cur, locale))}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {/* Net of pending group shares — show only when
-                        meaningfully nonzero so users without groups
-                        see the same UI as before. */}
-                    {summary && Math.abs(summary.pending_shares_net) >= 0.01 && (
-                      <p
-                        className={`text-[10px] tabular-nums mt-0.5 ${
-                          summary.pending_shares_net < 0 ? 'text-rose-500' : 'text-emerald-600'
-                        }`}
-                        title={t('dashboard.pendingSharesTooltip')}
-                      >
-                        {summary.pending_shares_net < 0
-                          ? t('dashboard.pendingSharesOwe', {
-                              net: mask(formatCurrency(totalBalance + summary.pending_shares_net, primaryCurrency, locale)),
-                              owed: mask(formatCurrency(Math.abs(summary.pending_shares_net), primaryCurrency, locale)),
-                            })
-                          : t('dashboard.pendingSharesOwed', {
-                              net: mask(formatCurrency(totalBalance + summary.pending_shares_net, primaryCurrency, locale)),
-                              owed: mask(formatCurrency(summary.pending_shares_net, primaryCurrency, locale)),
-                            })}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`text-sm font-semibold tabular-nums ${(isCC ? bal > 0 : bal < 0) ? 'text-rose-500' : 'text-foreground'}`}>
+                      {mask(formatCurrency(bal, nextBill?.currency ?? acc.currency, locale))}
+                    </p>
+                    {isCC && acc.available_credit != null && (
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {t('accounts.availableCredit')}: {mask(formatCurrency(Number(acc.available_credit), acc.currency, locale))}
                       </p>
                     )}
                   </div>
-                )}
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Hero Card: Uncategorized CTA */}
+      <div className="bg-card rounded-xl border border-border shadow-sm mb-5">
+        <div className="px-5 py-4 flex flex-col items-center justify-center text-center">
+          {summaryLoading ? (
+            <Skeleton className="h-16 w-16 rounded-full" />
+          ) : uncategorizedCount > 0 ? (
+            <div
+              className="cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setDrillDown({
+                title: t('dashboard.drillDownUncategorized'),
+                uncategorized: true,
+              })}
+            >
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-white mx-auto mb-2 ${
+                uncategorizedCount >= 20 ? 'bg-amber-500' : 'bg-amber-400'
+              }`}>
+                {uncategorizedCount}
               </div>
-
-              {/* Income */}
-              <div
-                className="min-w-0 cursor-pointer hover:opacity-70 transition-opacity"
-                onClick={() => setDrillDown({
-                  title: t('dashboard.drillDownIncome', { month: monthLabelStr }),
-                  type: 'credit',
-                  from: monthStart,
-                  to: monthEnd,
-                })}
-              >
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('dashboard.monthlyIncome')}</p>
-                {summaryLoading ? (
-                  <Skeleton className="h-7 w-24" />
-                ) : (
-                  <p className="text-lg font-bold tabular-nums text-emerald-600">
-                    +{mask(formatCurrency(income, primaryCurrency, locale))}
-                  </p>
-                )}
-              </div>
-
-              {/* Expenses */}
-              <div
-                className="min-w-0 cursor-pointer hover:opacity-70 transition-opacity"
-                onClick={() => setDrillDown({
-                  title: t('dashboard.drillDownExpenses', { month: monthLabelStr }),
-                  type: 'debit',
-                  from: monthStart,
-                  to: monthEnd,
-                })}
-              >
-                <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('dashboard.monthlyExpenses')}</p>
-                {summaryLoading ? (
-                  <Skeleton className="h-7 w-24" />
-                ) : (
-                  <p className="text-lg font-bold tabular-nums text-rose-500">
-                    -{mask(formatCurrency(expenses, primaryCurrency, locale))}
-                  </p>
-                )}
-              </div>
-
-              {/* Assets Value */}
-              {!summaryLoading && summary?.assets_value && Object.values(summary.assets_value).reduce((a, b) => a + b, 0) > 0 && (
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">{t('dashboard.assetsValue')}</p>
-                  <p className="text-lg font-bold tabular-nums text-blue-600">
-                    {mask(formatCurrency(summary.assets_value_primary ?? Object.values(summary.assets_value).reduce((a, b) => a + b, 0), primaryCurrency, locale))}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Spending projection */}
-            {projectedSpend !== null && !summaryLoading && (
-              <p className="text-xs text-muted-foreground mt-2">
-                {t('dashboard.spendingProjection', { amount: mask(formatCurrency(projectedSpend, primaryCurrency, locale)) })}
+              <p className="text-sm font-medium text-foreground">
+                {t('dashboard.uncategorizedCta', { count: uncategorizedCount })}
               </p>
-            )}
-          </div>
-
-          {/* Right: Uncategorized CTA */}
-          <div className="lg:col-span-1 px-5 py-4 border-t lg:border-t-0 lg:border-l border-border flex flex-col items-center justify-center text-center">
-            {summaryLoading ? (
-              <Skeleton className="h-16 w-16 rounded-full" />
-            ) : uncategorizedCount > 0 ? (
-              <div
-                className="cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setDrillDown({
-                  title: t('dashboard.drillDownUncategorized'),
-                  uncategorized: true,
-                })}
-              >
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-white mx-auto mb-2 ${
-                  uncategorizedCount >= 20 ? 'bg-amber-500' : 'bg-amber-400'
-                }`}>
-                  {uncategorizedCount}
-                </div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('dashboard.uncategorizedCta', { count: uncategorizedCount })}
+              {uncategorizedAmount > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {mask(t('dashboard.uncategorizedTotal', { amount: formatCurrency(uncategorizedAmount, userCurrency, locale) }))}
                 </p>
-                {uncategorizedAmount > 0 && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {mask(t('dashboard.uncategorizedTotal', { amount: formatCurrency(uncategorizedAmount, userCurrency, locale) }))}
-                  </p>
-                )}
-                <p className="text-sm font-semibold text-amber-600 mt-2 hover:underline">
-                  {t('dashboard.categorizeNow')} &rarr;
-                </p>
-              </div>
-            ) : (
-              <div>
-                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-1.5" />
-                <p className="text-sm font-semibold text-foreground">{t('dashboard.allCategorized')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.allCategorizedDesc')}</p>
-              </div>
-            )}
-          </div>
+              )}
+              <p className="text-sm font-semibold text-amber-600 mt-2 hover:underline">
+                {t('dashboard.categorizeNow')} &rarr;
+              </p>
+            </div>
+          ) : (
+            <div>
+              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-1.5" />
+              <p className="text-sm font-semibold text-foreground">{t('dashboard.allCategorized')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('dashboard.allCategorizedDesc')}</p>
+            </div>
+          )}
         </div>
       </div>
 

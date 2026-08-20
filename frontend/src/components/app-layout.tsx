@@ -6,6 +6,7 @@ import { useDisplayLocale } from '@/hooks/use-display-locale'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
+import { useMeetingRecording } from '@/contexts/meeting-recording-context'
 import { useWorkspace } from '@/contexts/workspace-context'
 import { CollectionSelector } from '@/components/collection-selector'
 import { auth as authApi, backup as backupApi, admin as adminApi } from '@/lib/api'
@@ -105,6 +106,7 @@ export function AppLayout() {
   const { theme, setTheme, resolvedTheme } = useTheme()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [financesExpanded, setFinancesExpanded] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(true)
   const [accountsShowAll, setAccountsShowAll] = useState(false)
   const { privacyMode, togglePrivacyMode, mask } = usePrivacyMode()
@@ -118,6 +120,7 @@ export function AppLayout() {
   useCommandPaletteHotkey(setPaletteOpen)
   const { agentsEnabled } = useFeatureFlags()
   const { hasModule, isLoading: workspaceLoading } = useWorkspace()
+  const meetingRecording = useMeetingRecording()
 
   // ⌘J / Ctrl+J toggles the global slide-over chat from anywhere.
   // Distinct from ⌘K (command palette) so users can have both open.
@@ -217,6 +220,7 @@ export function AppLayout() {
           </span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
+          {meetingRecording.recording && <RecordingPill seconds={meetingRecording.elapsedSeconds} />}
           <button
             onClick={() => setPaletteOpen(true)}
             className="text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1"
@@ -313,6 +317,7 @@ export function AppLayout() {
               </span>
             </Link>
             <div className="flex items-center gap-0.5">
+              {meetingRecording.recording && <RecordingPill seconds={meetingRecording.elapsedSeconds} />}
               <button
                 onClick={togglePrivacyMode}
                 className="text-sidebar-muted hover:text-sidebar-foreground transition-colors p-1 rounded-md hover:bg-sidebar-accent"
@@ -388,6 +393,86 @@ export function AppLayout() {
                     <span className="text-[10px] uppercase tracking-[0.12em] font-semibold text-sidebar-muted/50">
                       {t(item.labelKey)}
                     </span>
+                  </div>
+                )
+              }
+
+              if (item.type === 'group') {
+                const GroupIcon = item.icon
+                const groupActive =
+                  location.pathname === '/' ||
+                  item.items.some((c) => location.pathname.startsWith(c.path))
+                return (
+                  <div key={item.key}>
+                    <div
+                      className={cn(
+                        'flex w-full items-center gap-1 text-[13px] font-medium transition-all rounded-lg pr-1',
+                        groupActive && !financesExpanded
+                          ? 'bg-primary/[0.08] text-primary'
+                          : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      )}
+                    >
+                      <Link
+                        to="/"
+                        data-tour={`nav-${item.key}`}
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex flex-1 items-center gap-3 px-3 py-2 min-w-0"
+                      >
+                        <GroupIcon
+                          size={17}
+                          className={cn(
+                            'shrink-0',
+                            groupActive && !financesExpanded ? 'text-primary' : 'text-sidebar-muted',
+                          )}
+                        />
+                        <span className="flex-1 text-left">{t(`nav.${item.key}`)}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setFinancesExpanded((v) => !v)}
+                        aria-label={financesExpanded ? t('common.collapse') : t('common.expand')}
+                        className="shrink-0 p-1.5 rounded-md hover:bg-sidebar-accent"
+                      >
+                        <ChevronRight
+                          size={13}
+                          className={cn(
+                            'shrink-0 text-sidebar-muted transition-transform',
+                            financesExpanded && 'rotate-90',
+                          )}
+                        />
+                      </button>
+                    </div>
+                    {financesExpanded && (
+                      <div className="mt-0.5 space-y-0.5">
+                        {item.items.map((child) => {
+                          const childActive = location.pathname.startsWith(child.path)
+                          const ChildIcon = child.icon
+                          return (
+                            <Link
+                              key={child.key}
+                              to={child.path}
+                              data-tour={`nav-${child.key}`}
+                              onClick={() => setSidebarOpen(false)}
+                              className={cn(
+                                'flex items-center gap-3 text-[13px] font-medium transition-all rounded-lg pl-8 pr-3 py-1.5',
+                                childActive
+                                  ? 'bg-primary/[0.08] text-primary border-l-[3px] border-primary pl-[29px]'
+                                  : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                              )}
+                            >
+                              <ChildIcon
+                                size={15}
+                                className={cn(
+                                  'shrink-0',
+                                  childActive ? 'text-primary' : 'text-sidebar-muted',
+                                )}
+                              />
+                              <span>{t(`nav.${child.key}`)}</span>
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               }
@@ -605,6 +690,26 @@ export function AppLayout() {
         onClose={() => setUpdateDialogOpen(false)}
       />
     </div>
+  )
+}
+
+/** Shown in the header on every page, not just /meetings — recording lives
+ * in a context above <Outlet /> so it keeps going while the user is
+ * elsewhere in the app; this is the reminder that it's still on, and a way
+ * back to it (and to the finished-recording save prompt once stopped). */
+function RecordingPill({ seconds }: { seconds: number }) {
+  const { t } = useTranslation()
+  const mm = Math.floor(seconds / 60)
+  const ss = seconds % 60
+  return (
+    <Link
+      to="/meetings"
+      className="flex items-center gap-1.5 rounded-full bg-destructive/10 text-destructive px-2.5 py-1 text-xs font-semibold tabular-nums hover:bg-destructive/20 transition-colors"
+      title={t('meetings.recordingInBackground', 'Recording in background — tap to open')}
+    >
+      <Mic size={12} className="animate-pulse" />
+      {mm}:{String(ss).padStart(2, '0')}
+    </Link>
   )
 }
 

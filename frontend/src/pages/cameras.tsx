@@ -156,7 +156,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
 
             {playing ? (
               <div className="space-y-2">
-                <div className="aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center">
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-black flex items-center justify-center isolate">
                   {videoLoading || !videoUrl ? (
                     <Skeleton className="w-full h-full rounded-none" />
                   ) : (
@@ -168,7 +168,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                 </Button>
               </div>
             ) : (
-              <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+              <div className="relative aspect-video rounded-lg overflow-hidden bg-muted flex items-center justify-center isolate">
                 {url ? (
                   <img src={url} alt={camera.name} className="w-full h-full object-cover" />
                 ) : (
@@ -177,7 +177,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
               </div>
             )}
 
-            <div className="mt-4">
+            <div className="relative mt-4 bg-background">
               <h3 className="text-sm font-semibold mb-2">{t('cameras.recordings', 'Gravações')}</h3>
               {recLoading ? (
                 <Skeleton className="h-24 w-full" />
@@ -185,13 +185,13 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                 <p className="text-sm text-muted-foreground">{t('cameras.noRecordings', 'Nenhuma gravação encontrada.')}</p>
               ) : (
                 <>
-                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
                     {recordings.slice(0, recLimit).map((rec) => (
                       <button
                         key={rec.filename}
                         type="button"
                         onClick={() => openRecording(rec)}
-                        className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted/50 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 bg-card hover:bg-muted/50 transition-colors text-left"
                       >
                         <Video className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm flex-1 min-w-0 truncate">{formatRecordingDate(rec.modified)}</span>

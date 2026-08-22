@@ -5,11 +5,36 @@ routes, which forward the request server-side.
 """
 from __future__ import annotations
 
+import re
+from datetime import date as date_cls, datetime, time as time_cls, timezone
 from typing import Any, AsyncIterator, Optional
+from zoneinfo import ZoneInfo
 
 import httpx
 
 from app.core.config import get_settings
+
+# The recording server stamps the true event start into the filename
+# itself, already in local time (e.g. "1_2026-08-20_16-36-05_411.mp4") —
+# several seconds before `modified`, which is when the file finished
+# writing to disk. Search/sort by the filename timestamp; fall back to
+# `modified` (converted from UTC) only if a filename doesn't match.
+_FILENAME_TIMESTAMP = re.compile(r"_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})_")
+_LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def recording_datetime(rec: dict[str, Any]) -> datetime:
+    match = _FILENAME_TIMESTAMP.search(rec.get("filename") or "")
+    if match:
+        d, hh, mm, ss = match.groups()
+        return datetime.fromisoformat(f"{d}T{hh}:{mm}:{ss}")
+    modified = rec.get("modified")
+    if modified:
+        dt = datetime.fromisoformat(modified.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(_LOCAL_TZ).replace(tzinfo=None)
+    return datetime.min
 
 
 class CameraApiNotConfigured(RuntimeError):
@@ -51,6 +76,34 @@ async def list_recordings(location: str, camera_name: str) -> list[dict[str, Any
         )
         resp.raise_for_status()
         return resp.json()
+
+
+async def search_recordings(
+    location: str,
+    camera_name: str,
+    *,
+    on_date: Optional[date_cls] = None,
+    time_from: Optional[time_cls] = None,
+    time_to: Optional[time_cls] = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Filters one camera's recordings by calendar day and/or time-of-day
+    range. The upstream API has no filtering of its own — it always
+    returns the full list (hundreds of clips isn't unusual) — so this
+    fetches everything once and filters here."""
+    all_recs = await list_recordings(location, camera_name)
+    matches: list[dict[str, Any]] = []
+    for rec in all_recs:
+        dt = recording_datetime(rec)
+        if on_date is not None and dt.date() != on_date:
+            continue
+        if time_from is not None and dt.time() < time_from:
+            continue
+        if time_to is not None and dt.time() > time_to:
+            continue
+        matches.append({**rec, "recorded_at": dt.isoformat()})
+    matches.sort(key=lambda r: r["recorded_at"], reverse=True)
+    return matches[:limit]
 
 
 async def open_recording_stream(

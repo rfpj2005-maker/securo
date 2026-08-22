@@ -1191,6 +1191,14 @@ export const cameras = {
     const { data } = await api.get(`/cameras/recordings/${location}/${encodeURIComponent(cameraName)}`)
     return data
   },
+  search: async (
+    location: string,
+    cameraName: string,
+    params: { date?: string; time_from?: string; time_to?: string },
+  ): Promise<CameraRecording[]> => {
+    const { data } = await api.get(`/cameras/search/${location}/${encodeURIComponent(cameraName)}`, { params })
+    return data
+  },
   recordingUrl: async (location: string, cameraName: string, filename: string): Promise<string> => {
     const { data } = await api.get(
       `/cameras/recording/${location}/${encodeURIComponent(cameraName)}/${encodeURIComponent(filename)}`,

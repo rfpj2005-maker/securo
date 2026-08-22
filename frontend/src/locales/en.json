@@ -1394,7 +1394,15 @@
     "loadMore": "Load more",
     "backToLive": "Back to live view",
     "today": "Today",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "searchTitle": "Find a recording",
+    "searchCamera": "Camera",
+    "searchCameraPlaceholder": "Pick a camera",
+    "searchDate": "Day",
+    "searchTimeFrom": "From",
+    "searchTimeTo": "To",
+    "search": "Search",
+    "searching": "Searching…"
   },
   "meetings": {
     "title": "Meetings",

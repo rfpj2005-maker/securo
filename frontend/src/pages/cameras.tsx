@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { cameras as camerasApi } from '@/lib/api'
@@ -6,8 +6,10 @@ import { useCameraSnapshot } from '@/hooks/use-camera-snapshot'
 import { PageHeader } from '@/components/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Video, WifiOff, Circle, Camera as CameraIcon } from 'lucide-react'
+import { Video, WifiOff, Circle, Camera as CameraIcon, Search } from 'lucide-react'
 import type { Camera, CameraRecording } from '@/types'
 
 const LOCATION_LABELS: Record<string, string> = {
@@ -45,6 +47,8 @@ export default function CamerasPage() {
       <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
         {t('cameras.subtitle', 'Câmeras de todas as unidades, com imagem ao vivo e gravações.')}
       </p>
+
+      {!isLoading && (camerasList?.length ?? 0) > 0 && <RecordingSearch camerasList={camerasList!} />}
 
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -221,6 +225,198 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                     </Button>
                   )}
                 </>
+              )}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RecordingSearch({ camerasList }: { camerasList: Camera[] }) {
+  const { t } = useTranslation()
+  const [cameraKey, setCameraKey] = useState('')
+  const [date, setDate] = useState('')
+  const [timeFrom, setTimeFrom] = useState('')
+  const [timeTo, setTimeTo] = useState('')
+  const [results, setResults] = useState<CameraRecording[] | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [playing, setPlaying] = useState<CameraRecording | null>(null)
+
+  const byLocation = useMemo(() => {
+    const map = new Map<string, Camera[]>()
+    for (const cam of camerasList) {
+      const list = map.get(cam.location) ?? []
+      list.push(cam)
+      map.set(cam.location, list)
+    }
+    return map
+  }, [camerasList])
+
+  const [selLocation, selName] = cameraKey ? cameraKey.split('::') : ['', '']
+
+  const handleSearch = async () => {
+    if (!cameraKey) return
+    setSearching(true)
+    setResults(null)
+    try {
+      const items = await camerasApi.search(selLocation, selName, {
+        date: date || undefined,
+        time_from: timeFrom || undefined,
+        time_to: timeTo || undefined,
+      })
+      setResults(items)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  return (
+    <div className="bg-card rounded-xl border border-border shadow-sm p-4 mb-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Search className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold">{t('cameras.searchTitle', 'Buscar gravação')}</h2>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="col-span-2 sm:col-span-1 space-y-1.5">
+          <Label className="text-xs">{t('cameras.searchCamera', 'Câmera')}</Label>
+          <select
+            className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus-visible:ring-ring/30 focus-visible:ring-[2px]"
+            value={cameraKey}
+            onChange={(e) => setCameraKey(e.target.value)}
+          >
+            <option value="">{t('cameras.searchCameraPlaceholder', 'Escolha uma câmera')}</option>
+            {Array.from(byLocation.entries()).map(([location, cams]) => (
+              <optgroup key={location} label={LOCATION_LABELS[location] ?? location}>
+                {cams.map((cam) => (
+                  <option key={cam.id} value={`${cam.location}::${cam.name}`}>
+                    {cam.name}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">{t('cameras.searchDate', 'Dia')}</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">{t('cameras.searchTimeFrom', 'A partir de')}</Label>
+          <Input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">{t('cameras.searchTimeTo', 'Até')}</Label>
+          <Input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} />
+        </div>
+      </div>
+      <Button size="sm" className="mt-3" onClick={handleSearch} disabled={!cameraKey || searching}>
+        <Search className="h-3.5 w-3.5 mr-1.5" />
+        {searching ? t('cameras.searching', 'Buscando…') : t('cameras.search', 'Buscar')}
+      </Button>
+
+      {results !== null && (
+        <div className="mt-4">
+          {results.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('cameras.noRecordings', 'Nenhuma gravação encontrada.')}</p>
+          ) : (
+            <div className="space-y-4">
+              {groupRecordingsByDay(results, t).map((group) => (
+                <div key={group.key}>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                    {group.label}
+                  </div>
+                  <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-card">
+                    {group.items.map((rec) => (
+                      <button
+                        key={rec.filename}
+                        type="button"
+                        onClick={() => setPlaying(rec)}
+                        className="w-full flex items-center gap-3 px-3 py-2 bg-card hover:bg-muted/50 transition-colors text-left"
+                      >
+                        <Video className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm flex-1 min-w-0 truncate">
+                          {formatTimeOfDay(getRecordingDate(rec.filename, rec.modified))}
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{formatSize(rec.size)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <SearchResultPlayerDialog
+        location={selLocation}
+        cameraName={selName}
+        recording={playing}
+        onClose={() => setPlaying(null)}
+      />
+    </div>
+  )
+}
+
+function SearchResultPlayerDialog({
+  location,
+  cameraName,
+  recording,
+  onClose,
+}: {
+  location: string
+  cameraName: string
+  recording: CameraRecording | null
+  onClose: () => void
+}) {
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!recording) {
+      setVideoUrl(null)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    camerasApi.recordingUrl(location, cameraName, recording.filename).then((u) => {
+      if (cancelled) {
+        URL.revokeObjectURL(u)
+        return
+      }
+      setVideoUrl(u)
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [recording, location, cameraName])
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      if (videoUrl) URL.revokeObjectURL(videoUrl)
+      setVideoUrl(null)
+      onClose()
+    }
+  }
+
+  return (
+    <Dialog open={!!recording} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        {recording && (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {cameraName} — {formatTimeOfDay(getRecordingDate(recording.filename, recording.modified))}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="relative h-56 sm:h-72 rounded-lg overflow-hidden bg-black flex items-center justify-center isolate">
+              {loading || !videoUrl ? (
+                <Skeleton className="w-full h-full rounded-none" />
+              ) : (
+                <video src={videoUrl} controls autoPlay aria-label={cameraName} className="w-full h-full" />
               )}
             </div>
           </>

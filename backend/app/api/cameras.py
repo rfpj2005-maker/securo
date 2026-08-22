@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import date as date_cls, time as time_cls
+from typing import Any, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.core.auth import current_active_user
@@ -42,6 +43,25 @@ async def snapshot(location: str, camera_id: str, user: User = Depends(current_a
 async def recordings(location: str, camera_name: str, user: User = Depends(current_active_user)):
     try:
         return await camera_service.list_recordings(location, camera_name)
+    except camera_service.CameraApiNotConfigured as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise _unavailable(exc) from exc
+
+
+@router.get("/search/{location}/{camera_name}", response_model=list[dict[str, Any]])
+async def search_recordings(
+    location: str,
+    camera_name: str,
+    on_date: Optional[date_cls] = Query(None, alias="date"),
+    time_from: Optional[time_cls] = Query(None),
+    time_to: Optional[time_cls] = Query(None),
+    user: User = Depends(current_active_user),
+):
+    try:
+        return await camera_service.search_recordings(
+            location, camera_name, on_date=on_date, time_from=time_from, time_to=time_to
+        )
     except camera_service.CameraApiNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except httpx.HTTPError as exc:

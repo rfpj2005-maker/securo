@@ -1395,7 +1395,15 @@
     "loadMore": "Carregar mais",
     "backToLive": "Voltar pra câmera ao vivo",
     "today": "Hoje",
-    "yesterday": "Ontem"
+    "yesterday": "Ontem",
+    "searchTitle": "Buscar gravação",
+    "searchCamera": "Câmera",
+    "searchCameraPlaceholder": "Escolha uma câmera",
+    "searchDate": "Dia",
+    "searchTimeFrom": "A partir de",
+    "searchTimeTo": "Até",
+    "search": "Buscar",
+    "searching": "Buscando…"
   },
   "meetings": {
     "title": "Gravação",

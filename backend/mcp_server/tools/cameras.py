@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date as _date, time as _time
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,4 +48,48 @@ async def list_camera_recordings(
     *, session: AsyncSession, ctx: CallContext, location: str, camera_name: str
 ) -> dict[str, Any]:
     items = await camera_service.list_recordings(location, camera_name)
+    return {"items": items, "total": len(items)}
+
+
+@tool(
+    name="search_camera_recordings",
+    description=(
+        "Find recordings for one camera on a specific day and/or time-of-day range — use this "
+        "instead of list_camera_recordings whenever the user gives a date, 'today', 'yesterday', "
+        "or a time like 'this morning' or 'around 3pm', since a camera can have hundreds of clips "
+        "and this filters server-side instead of dumping them all. location/camera_name come from "
+        "list_cameras. Still returns metadata only — tell the user to open the Câmeras page to "
+        "actually watch a match."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "location": {"type": "string", "description": "e.g. 'matriz', 'belvedere', 'varginha'"},
+            "camera_name": {"type": "string", "description": "e.g. 'PVBelve02'"},
+            "date": {"type": "string", "format": "date", "description": "YYYY-MM-DD, optional"},
+            "time_from": {"type": "string", "description": "HH:MM, optional — start of the time-of-day window"},
+            "time_to": {"type": "string", "description": "HH:MM, optional — end of the time-of-day window"},
+        },
+        "required": ["location", "camera_name"],
+        "additionalProperties": False,
+    },
+    tags=["read", "cameras"],
+)
+async def search_camera_recordings(
+    *,
+    session: AsyncSession,
+    ctx: CallContext,
+    location: str,
+    camera_name: str,
+    date: str | None = None,
+    time_from: str | None = None,
+    time_to: str | None = None,
+) -> dict[str, Any]:
+    items = await camera_service.search_recordings(
+        location,
+        camera_name,
+        on_date=_date.fromisoformat(date) if date else None,
+        time_from=_time.fromisoformat(time_from) if time_from else None,
+        time_to=_time.fromisoformat(time_to) if time_to else None,
+    )
     return {"items": items, "total": len(items)}

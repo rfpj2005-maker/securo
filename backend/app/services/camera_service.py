@@ -6,6 +6,7 @@ routes, which forward the request server-side.
 from __future__ import annotations
 
 import re
+import time
 from datetime import date as date_cls, datetime, time as time_cls, timezone
 from typing import Any, AsyncIterator, Optional
 from zoneinfo import ZoneInfo
@@ -50,12 +51,44 @@ def _base_and_key() -> tuple[str, str]:
     return base, key
 
 
+# Stopgap for when the NVR's own channel list drifts from reality —
+# cameras physically removed but still registered as channels, or renamed
+# on-site without the NVR config following. There's no admin API on that
+# server to fix this at the source (probed: no /api/config, /openapi.json,
+# or per-camera write endpoints — read-only), so it's patched here
+# instead when needed.
+#
+# Emptied 2026-08-24, one entry added back 2026-08-29 (PVBelve04 — user
+# confirmed it no longer physically exists; matches the earlier matriz
+# pattern of a dead channel still stuck "connecting" forever). This class
+# of drift has recurred before and will again.
+#
+# (location, name) as returned by /api/cameras -> None to exclude a dead
+# channel entirely, or a str to relabel it for display only. Recordings/
+# snapshot lookups still use the NVR's real `name` (see list_cameras
+# below) — only what's shown to a person changes.
+_CAMERA_OVERRIDES: dict[tuple[str, str], Optional[str]] = {
+    ("belvedere", "PVBelve04"): None,
+}
+
+
 async def list_cameras() -> list[dict[str, Any]]:
     base, key = _base_and_key()
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(f"{base}/api/cameras", headers={"X-Api-Key": key})
         resp.raise_for_status()
-        return resp.json()
+        cameras: list[dict[str, Any]] = resp.json()
+
+    out: list[dict[str, Any]] = []
+    for cam in cameras:
+        key_tuple = (cam.get("location"), cam.get("name"))
+        if key_tuple in _CAMERA_OVERRIDES:
+            override = _CAMERA_OVERRIDES[key_tuple]
+            if override is None:
+                continue  # decommissioned — drop it entirely
+            cam = {**cam, "display_name": override}
+        out.append(cam)
+    return out
 
 
 async def get_snapshot(location: str, camera_id: str) -> tuple[bytes, str]:
@@ -138,3 +171,43 @@ async def open_recording_stream(
             await client.aclose()
 
     return content_type, int(content_length) if content_length else None, _iter()
+
+
+# Agent DVR's audio.mp3 streams indefinitely — there's no natural end to
+# cut a request off at, so we impose one here. This turns "live audio"
+# into "the frontend re-fetches a fresh clip every ~AUDIO_CHUNK_SECONDS",
+# which reuses the exact same authenticated-blob pattern already proven
+# for snapshots/recordings instead of needing a new streaming-auth
+# mechanism (e.g. a signed query-param token) just for this.
+AUDIO_CHUNK_SECONDS = 10.0
+
+
+async def open_audio_stream(location: str, camera_name: str) -> AsyncIterator[bytes]:
+    """Streams up to AUDIO_CHUNK_SECONDS of live audio for one camera, then
+    closes — see AUDIO_CHUNK_SECONDS. Raises httpx.HTTPStatusError (404)
+    if the camera has no microphone object in Agent DVR."""
+    base, key = _base_and_key()
+    client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, read=None))
+    req = client.build_request(
+        "GET", f"{base}/api/audio/{location}/{camera_name}", headers={"X-Api-Key": key}
+    )
+    resp = await client.send(req, stream=True)
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError:
+        await resp.aclose()
+        await client.aclose()
+        raise
+
+    async def _iter() -> AsyncIterator[bytes]:
+        started = time.monotonic()
+        try:
+            async for chunk in resp.aiter_bytes():
+                yield chunk
+                if time.monotonic() - started >= AUDIO_CHUNK_SECONDS:
+                    break
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return _iter()

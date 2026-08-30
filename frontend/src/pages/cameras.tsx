@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { cameras as camerasApi } from '@/lib/api'
@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Video, WifiOff, Circle, Camera as CameraIcon, Search } from 'lucide-react'
-import type { Camera, CameraRecording } from '@/types'
+import { Video, WifiOff, Circle, Camera as CameraIcon, Search, ServerCrash, Volume2, VolumeX, Maximize2, Minimize2 } from 'lucide-react'
+import type { Camera, CameraLocationError, CameraRecording } from '@/types'
 
 const LOCATION_LABELS: Record<string, string> = {
   matriz: 'Matriz',
@@ -21,25 +21,42 @@ const LOCATION_LABELS: Record<string, string> = {
 
 const RECORDINGS_PAGE_SIZE = 30
 
+function isLocationError(c: Camera | CameraLocationError): c is CameraLocationError {
+  return 'error' in c
+}
+
 export default function CamerasPage() {
   const { t } = useTranslation()
   const [selected, setSelected] = useState<Camera | null>(null)
 
-  const { data: camerasList, isLoading } = useQuery({
+  const { data: rawList, isLoading } = useQuery({
     queryKey: ['cameras'],
     queryFn: () => camerasApi.list(),
     refetchInterval: 30000,
   })
 
+  // A location whose recording server couldn't be reached at all (store's
+  // local machine powered off, tunnel down, ...) sends one error
+  // placeholder instead of its usual camera entries — split those out so
+  // they get an explanatory banner instead of rendering as a blank tile.
+  const realCameras = useMemo(
+    () => (rawList ?? []).filter((c): c is Camera => !isLocationError(c)),
+    [rawList],
+  )
+  const unreachableLocations = useMemo(
+    () => (rawList ?? []).filter(isLocationError),
+    [rawList],
+  )
+
   const byLocation = useMemo(() => {
     const map = new Map<string, Camera[]>()
-    for (const cam of camerasList ?? []) {
+    for (const cam of realCameras) {
       const list = map.get(cam.location) ?? []
       list.push(cam)
       map.set(cam.location, list)
     }
     return map
-  }, [camerasList])
+  }, [realCameras])
 
   return (
     <div>
@@ -48,33 +65,46 @@ export default function CamerasPage() {
         {t('cameras.subtitle', 'Câmeras de todas as unidades, com imagem ao vivo e gravações.')}
       </p>
 
-      {!isLoading && (camerasList?.length ?? 0) > 0 && <RecordingSearch camerasList={camerasList!} />}
-
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="aspect-video rounded-xl" />
           ))}
         </div>
-      ) : (camerasList ?? []).length === 0 ? (
+      ) : (rawList ?? []).length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
           <CameraIcon className="h-8 w-8 mb-2 opacity-50" />
           <p className="text-sm">{t('cameras.empty', 'Nenhuma câmera configurada.')}</p>
         </div>
       ) : (
-        Array.from(byLocation.entries()).map(([location, cams]) => (
-          <div key={location} className="mb-6">
-            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              {LOCATION_LABELS[location] ?? location}
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {cams.map((cam) => (
-                <CameraTile key={`${cam.location}-${cam.id}`} camera={cam} onClick={() => setSelected(cam)} />
-              ))}
+        <>
+          {Array.from(byLocation.entries()).map(([location, cams]) => (
+            <div key={location} className="mb-6">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {LOCATION_LABELS[location] ?? location}
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {cams.map((cam) => (
+                  <CameraTile key={`${cam.location}-${cam.id}`} camera={cam} onClick={() => setSelected(cam)} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+          {unreachableLocations.map((loc) => (
+            <div key={loc.location} className="mb-6">
+              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                {LOCATION_LABELS[loc.location] ?? loc.location}
+              </h2>
+              <div className="flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                <ServerCrash className="h-4 w-4 shrink-0" />
+                {t('cameras.locationUnreachable', 'Servidor local dessa unidade está fora do ar no momento.')}
+              </div>
+            </div>
+          ))}
+        </>
       )}
+
+      {!isLoading && realCameras.length > 0 && <RecordingSearch camerasList={realCameras} />}
 
       <CameraDetailDialog camera={selected} onClose={() => setSelected(null)} />
     </div>
@@ -84,6 +114,7 @@ export default function CamerasPage() {
 function CameraTile({ camera, onClick }: { camera: Camera; onClick: () => void }) {
   const { url } = useCameraSnapshot(camera.location, camera.id, 10000, camera.online)
   const statusColor = !camera.online ? 'fill-rose-400 text-rose-400' : camera.connected ? 'fill-emerald-400 text-emerald-400' : 'fill-amber-400 text-amber-400'
+  const label = camera.display_name ?? camera.name
 
   return (
     <button
@@ -92,7 +123,7 @@ function CameraTile({ camera, onClick }: { camera: Camera; onClick: () => void }
       className="relative aspect-video rounded-xl overflow-hidden border border-border bg-muted text-left"
     >
       {url ? (
-        <img src={url} alt={camera.name} className="w-full h-full object-cover" />
+        <img src={url} alt={label} className="w-full h-full object-cover" />
       ) : camera.online ? (
         <Skeleton className="w-full h-full rounded-none" />
       ) : (
@@ -103,7 +134,7 @@ function CameraTile({ camera, onClick }: { camera: Camera; onClick: () => void }
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2.5 py-1.5">
         <div className="flex items-center gap-1.5">
           <Circle className={`h-2 w-2 shrink-0 ${statusColor}`} />
-          <span className="text-xs font-medium text-white truncate">{camera.name}</span>
+          <span className="text-xs font-medium text-white truncate">{label}</span>
         </div>
       </div>
     </button>
@@ -117,6 +148,18 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
   const [recLimit, setRecLimit] = useState(RECORDINGS_PAGE_SIZE)
+  const [audioOn, setAudioOn] = useState(false)
+  const [audioUnavailable, setAudioUnavailable] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const audioElRef = useRef<HTMLAudioElement | null>(null)
+
+  // Selecting a different camera swaps `camera` without the dialog ever
+  // closing (see CamerasPage's tile onClick) — give the new one a fresh
+  // chance at audio instead of carrying over the previous camera's
+  // "no microphone" state.
+  useEffect(() => {
+    setAudioUnavailable(false)
+  }, [camera?.location, camera?.id])
 
   const { data: recordings, isLoading: recLoading } = useQuery({
     queryKey: ['camera-recordings', camera?.location, camera?.name],
@@ -131,6 +174,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
   }
 
   const openRecording = async (rec: CameraRecording) => {
+    setAudioOn(false)
     setPlaying(rec)
     setVideoLoading(true)
     try {
@@ -144,10 +188,57 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       closePlayback()
+      setAudioOn(false)
+      setAudioUnavailable(false)
+      setExpanded(false)
       setRecLimit(RECORDINGS_PAGE_SIZE)
       onClose()
     }
   }
+
+  // Live audio, in ~10s chunks (see backend camera_service.AUDIO_CHUNK_SECONDS)
+  // fetched back-to-back — reuses the same authenticated-blob pattern as
+  // snapshots/recordings instead of needing a streaming-auth mechanism
+  // just for this. Not every camera has a microphone; a 404 here just
+  // disables the toggle rather than showing an error.
+  useEffect(() => {
+    if (!audioOn || !camera || playing) return
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    async function loop() {
+      while (!cancelled) {
+        try {
+          const blob = await camerasApi.audioBlob(camera!.location, camera!.name)
+          if (cancelled) return
+          if (objectUrl) URL.revokeObjectURL(objectUrl)
+          objectUrl = URL.createObjectURL(blob)
+          const el = audioElRef.current
+          if (el) {
+            el.src = objectUrl
+            await el.play().catch(() => {})
+          }
+        } catch {
+          if (!cancelled) {
+            setAudioUnavailable(true)
+            setAudioOn(false)
+          }
+          return
+        }
+      }
+    }
+    void loop()
+
+    return () => {
+      cancelled = true
+      const el = audioElRef.current
+      if (el) {
+        el.pause()
+        el.src = ''
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [audioOn, camera, playing])
 
   return (
     <Dialog open={!!camera} onOpenChange={handleOpenChange}>
@@ -155,7 +246,7 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
         {camera && (
           <>
             <DialogHeader>
-              <DialogTitle>{camera.name}</DialogTitle>
+              <DialogTitle>{camera.display_name ?? camera.name}</DialogTitle>
             </DialogHeader>
 
             {playing ? (
@@ -172,16 +263,46 @@ function CameraDetailDialog({ camera, onClose }: { camera: Camera | null; onClos
                 </Button>
               </div>
             ) : (
-              <div className="relative h-56 sm:h-72 rounded-lg overflow-hidden bg-muted flex items-center justify-center isolate">
+              <div
+                className={`relative rounded-lg overflow-hidden bg-muted flex items-center justify-center isolate transition-[height] ${
+                  expanded ? 'h-[70vh]' : 'h-56 sm:h-72'
+                }`}
+              >
                 {url ? (
-                  <img src={url} alt={camera.name} className="w-full h-full object-cover" />
+                  <img src={url} alt={camera.display_name ?? camera.name} className="w-full h-full object-cover" />
                 ) : (
                   <Skeleton className="w-full h-full rounded-none" />
                 )}
+                <audio ref={audioElRef} className="hidden" />
+                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAudioOn((v) => !v)}
+                    disabled={audioUnavailable}
+                    title={
+                      audioUnavailable
+                        ? t('cameras.audioUnavailable', 'Esta câmera não tem microfone.')
+                        : audioOn
+                          ? t('cameras.muteAudio', 'Desativar som')
+                          : t('cameras.liveAudio', 'Ouvir som ao vivo')
+                    }
+                    className="rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {audioOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((v) => !v)}
+                    title={expanded ? t('cameras.collapse', 'Recolher') : t('cameras.expand', 'Ampliar')}
+                    className="rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80 transition-colors"
+                  >
+                    {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className="relative mt-4 bg-background">
+            <div className={`relative mt-4 bg-background ${expanded ? 'hidden' : ''}`}>
               <h3 className="text-sm font-semibold mb-2">{t('cameras.recordings', 'Gravações')}</h3>
               {recLoading ? (
                 <Skeleton className="h-24 w-full" />
@@ -291,7 +412,7 @@ function RecordingSearch({ camerasList }: { camerasList: Camera[] }) {
               <optgroup key={location} label={LOCATION_LABELS[location] ?? location}>
                 {cams.map((cam) => (
                   <option key={cam.id} value={`${cam.location}::${cam.name}`}>
-                    {cam.name}
+                    {cam.display_name ?? cam.name}
                   </option>
                 ))}
               </optgroup>

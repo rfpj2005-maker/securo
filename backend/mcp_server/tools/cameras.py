@@ -6,8 +6,19 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import camera_service
+from app.services.workspace_service import is_business_member
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
+
+
+async def _require_business_member(session: AsyncSession, ctx: CallContext) -> None:
+    """Cameras are Amparar company infrastructure, not workspace data —
+    mirrors the same gate api/cameras.py enforces over HTTP
+    (current_business_user). An agent belonging to a personal-only user
+    has no business seeing store security footage just because they're
+    on this install."""
+    if not await is_business_member(session, ctx.user_id):
+        raise PermissionError("Cameras are only available to business workspace members.")
 
 
 @tool(
@@ -23,6 +34,7 @@ from mcp_server.registry import tool
     tags=["read", "cameras"],
 )
 async def list_cameras(*, session: AsyncSession, ctx: CallContext) -> dict[str, Any]:
+    await _require_business_member(session, ctx)
     items = await camera_service.list_cameras()
     return {"items": items, "total": len(items)}
 
@@ -47,6 +59,7 @@ async def list_cameras(*, session: AsyncSession, ctx: CallContext) -> dict[str, 
 async def list_camera_recordings(
     *, session: AsyncSession, ctx: CallContext, location: str, camera_name: str
 ) -> dict[str, Any]:
+    await _require_business_member(session, ctx)
     items = await camera_service.list_recordings(location, camera_name)
     return {"items": items, "total": len(items)}
 
@@ -85,6 +98,7 @@ async def search_camera_recordings(
     time_from: str | None = None,
     time_to: str | None = None,
 ) -> dict[str, Any]:
+    await _require_business_member(session, ctx)
     items = await camera_service.search_recordings(
         location,
         camera_name,

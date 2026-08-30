@@ -56,6 +56,10 @@ class Message(Base):
     tool_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     # Citations attached to this message (RAG hits, transactions, etc.).
     citations: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Files the user attached to this message: [{id, filename, mime,
+    # size_bytes}]. Bytes live on disk (see ChatAttachment) — history
+    # replay reloads them by id to resend on later turns.
+    attachments: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     input_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     output_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -66,3 +70,20 @@ class Message(Base):
     __table_args__ = (
         Index("ix_agent_messages_conv_ord", "conversation_id", "ordinal"),
     )
+
+
+class ChatAttachment(Base):
+    """A file the user uploaded to attach to a chat message. Uploaded
+    separately from the send-message call (so the UI can show a preview
+    chip before the user hits send) and referenced by id afterwards."""
+
+    __tablename__ = "agent_chat_attachments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    mime: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    storage_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

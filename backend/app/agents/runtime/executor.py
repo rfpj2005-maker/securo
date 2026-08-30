@@ -330,10 +330,33 @@ class AgentExecutor:
         user_message: str,
         channel: str = "web",
         page_context: Optional[dict[str, Any]] = None,
+        attachment_ids: Optional[list[uuid.UUID]] = None,
     ) -> AsyncIterator[ExecutorEvent]:
+        # 0. Resolve attachments (if any) to metadata BEFORE persisting the
+        # user message, so the metadata can be stamped on that same row.
+        # Resolved once here; re-read from disk on every turn (including
+        # this one) via the history-replay loop below, since the LLM API
+        # is stateless and needs the bytes resent each call.
+        attachment_meta: Optional[list[dict[str, Any]]] = None
+        if attachment_ids:
+            from app.agents.services import attachment_service
+            resolved = []
+            for aid in attachment_ids:
+                att = await attachment_service.get_attachment(session, aid, user_id)
+                if att is None:
+                    yield ExecutorEvent(
+                        type="error", error_code="config",
+                        error_message=f"Anexo não encontrado ou não pertence a você: {aid}",
+                    )
+                    yield ExecutorEvent(type="done", finish_reason="error")
+                    return
+                resolved.append(attachment_service.to_meta(att))
+            attachment_meta = resolved
+
         # 1. Persist the user message first so it survives crashes.
         await conversation_service.append_message(
-            session, conversation_id=conversation_id, role="user", content=user_message
+            session, conversation_id=conversation_id, role="user", content=user_message,
+            attachments=attachment_meta,
         )
         await conversation_service.update_title_if_empty(session, conversation_id, user_message)
 
@@ -393,11 +416,28 @@ class AgentExecutor:
                 # Encode tool result as content for the LLM.
                 tr = m.tool_result or {}
                 content = tr.get("text") or _safe_json(tr.get("data"))
+            attachments_for_llm: list[dict[str, Any]] = []
+            if m.role == "user" and m.attachments:
+                from app.agents.services import attachment_service
+                for meta in m.attachments:
+                    att_id = meta.get("id") if isinstance(meta, dict) else None
+                    if not att_id:
+                        continue
+                    try:
+                        att = await attachment_service.get_attachment_any_owner(session, uuid.UUID(att_id))
+                        if att is not None:
+                            attachments_for_llm.append(attachment_service.to_llm_attachment(att))
+                    except (FileNotFoundError, ValueError):
+                        # File removed from disk, or a malformed id — skip
+                        # it rather than fail the whole turn; the model
+                        # just won't see that one attachment again.
+                        logger.warning("chat attachment %s unreadable during history replay", att_id)
             messages.append(ChatMessage(
                 role=cast(Role, m.role),
                 content=content,
                 tool_calls=tcs,
                 tool_call_id=tool_call_id,
+                attachments=attachments_for_llm,
             ))
 
         # 3. Discover tools from MCP and filter by per-agent whitelist.
@@ -431,6 +471,29 @@ class AgentExecutor:
             yield ExecutorEvent(type="done", finish_reason="error")
             return
 
+        # Native web search (currently Anthropic only) — per-agent opt-in
+        # stored in the schema-light `extra` blob, gated by provider
+        # support so a switch to e.g. Ollama doesn't error out.
+        want_web_search = bool((agent.extra or {}).get("web_search_enabled")) and getattr(
+            provider, "supports_web_search", False
+        )
+
+        # Attachments need real provider support (image/document content
+        # blocks) — fail loudly now rather than silently sending the
+        # question with the file dropped, which would look like the model
+        # just ignored what the user attached.
+        if attachment_meta and not getattr(provider, "supports_attachments", False):
+            yield ExecutorEvent(
+                type="error",
+                error_code="not_supported",
+                error_message=(
+                    f"O provedor {provider.name} não suporta anexos ainda — "
+                    "isso funciona hoje só com uma conexão Anthropic (Claude)."
+                ),
+            )
+            yield ExecutorEvent(type="done", finish_reason="error")
+            return
+
         # 4. Tool-calling loop. Cap iterations to prevent runaway agents.
         MAX_ITERS = 6
         for iteration in range(MAX_ITERS):
@@ -446,6 +509,7 @@ class AgentExecutor:
                     model=model,
                     tools=tool_defs or None,
                     temperature=agent.temperature,
+                    enable_web_search=want_web_search,
                 ):
                     async for ev in _process_chunk(chunk, text_buf, open_calls):
                         yield ev
@@ -599,6 +663,51 @@ async def _process_chunk(chunk: ChatChunk, text_buf: list[str], open_calls: dict
     elif chunk.type == "tool_call_args_delta" and chunk.tool_call_id:
         tc = open_calls.setdefault(chunk.tool_call_id, {"id": chunk.tool_call_id, "name": "", "args_buf": ""})
         tc["args_buf"] += chunk.args_delta or ""
+    elif chunk.type == "server_tool_call":
+        # Provider-executed (web search) — deliberately kept out of
+        # `open_calls`/`text_buf`: it must never reach the assembled_calls
+        # → MCP dispatch path below, only the UI chip.
+        yield ExecutorEvent(type="tool_call", tool_name=chunk.tool_name, tool_args=_parse_json_object(chunk.payload))
+    elif chunk.type == "server_tool_result":
+        yield ExecutorEvent(
+            type="tool_result",
+            tool_name=chunk.tool_name,
+            tool_result=_summarize_web_search_result(chunk.payload),
+        )
+
+
+def _parse_json_object(raw: Optional[str]) -> dict[str, Any]:
+    import json
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {"value": parsed}
+    except json.JSONDecodeError:
+        return {"_raw": raw}
+
+
+def _summarize_web_search_result(raw: Optional[str]) -> dict[str, Any]:
+    """Anthropic's web_search_tool_result content is either a list of
+    {type: 'web_search_result', title, url, page_age} items, or a single
+    {type: 'web_search_tool_result_error', error_code} object. Trim to
+    what's safe/useful to show — drop `encrypted_content` (meant to be
+    replayed back to Anthropic for citations, not displayed)."""
+    import json
+    if not raw:
+        return {"ok": True, "data": None, "text": None}
+    try:
+        content = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"ok": True, "data": None, "text": None}
+    if isinstance(content, dict) and content.get("type") == "web_search_tool_result_error":
+        return {"ok": False, "data": content, "text": f"web search error: {content.get('error_code')}"}
+    items = content if isinstance(content, list) else []
+    trimmed = [
+        {"title": it.get("title"), "url": it.get("url"), "page_age": it.get("page_age")}
+        for it in items if isinstance(it, dict)
+    ]
+    return {"ok": True, "data": {"items": trimmed}, "text": f"{len(trimmed)} resultado(s) da web"}
 
 
 async def _safe_call_tool(

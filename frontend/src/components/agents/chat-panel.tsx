@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ShellLogo } from '@/components/shell-logo'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Send, Sparkles, AlertCircle, Mic, Square, Car, Volume2 } from 'lucide-react'
+import { Loader2, Send, Sparkles, AlertCircle, Mic, Square, Car, Volume2, Paperclip, X, FileText, File as FileIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { agents } from '@/lib/api'
-import type { Agent, AgentMessage } from '@/lib/api'
+import type { Agent, AgentMessage, ChatAttachmentMeta } from '@/lib/api'
 import { streamChat, type AgentStreamEvent } from '@/lib/agents-stream'
 import { Markdown } from '@/components/agents/markdown'
 import { ProposalCard, isProposalData, isProposalToolName } from '@/components/agents/proposal-card'
@@ -36,7 +36,26 @@ interface DraftMessage {
   tools: { name: string; args: Record<string, unknown>; result?: { ok?: boolean; data?: unknown; text?: string | null } }[]
   error?: string
   pending?: boolean
+  attachments?: StagedAttachment[]
 }
+
+/** A file the user picked, from the moment it's selected through upload.
+ * `previewUrl` (images only) is a local blob: URL from the File object
+ * itself — no round trip needed just to show a thumbnail pre-send.
+ * `id` is filled in once the upload finishes; until then `uploading` is
+ * true and the chip shows a spinner instead of a remove button. */
+interface StagedAttachment {
+  localId: string
+  id: string | null
+  filename: string
+  mime: string
+  size_bytes: number
+  previewUrl: string | null
+  uploading: boolean
+  error?: string
+}
+
+const ACCEPTED_ATTACHMENT_TYPES = 'image/png,image/jpeg,image/webp,image/gif,application/pdf'
 
 export function ChatPanel({ agent, conversationId, onConversationCreated, focusSignal, getPageContext }: Props) {
   const { t } = useTranslation()
@@ -50,6 +69,8 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
   const [lastError, setLastError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [staged, setStaged] = useState<StagedAttachment[]>([])
   const speech = useSpeechRecognition('pt-BR')
   const synth = useSpeechSynthesis('pt-BR')
   // Whether the user is "pinned" to the bottom of the scroll area. We
@@ -142,6 +163,10 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
       setDraft(null)
       setPendingUser(null)
       setLastError(null)
+      setStaged((prev) => {
+        prev.forEach((s) => s.previewUrl && URL.revokeObjectURL(s.previewUrl))
+        return []
+      })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
@@ -178,12 +203,55 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
     isAtBottomRef.current = distance < 80
   }
 
+  // Upload starts the instant a file is picked (not deferred to send) so
+  // the user sees progress/errors right away instead of at send time.
+  const onFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    for (const file of Array.from(files)) {
+      const localId = crypto.randomUUID()
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+      setStaged((prev) => [
+        ...prev,
+        { localId, id: null, filename: file.name, mime: file.type, size_bytes: file.size, previewUrl, uploading: true },
+      ])
+      agents.attachments
+        .upload(agent.id, file)
+        .then((meta: ChatAttachmentMeta) => {
+          setStaged((prev) => prev.map((s) => (s.localId === localId ? { ...s, id: meta.id, uploading: false } : s)))
+        })
+        .catch((err: unknown) => {
+          const message = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+            ?? (err instanceof Error ? err.message : t('agents.chat.attachmentUploadFailed', 'Upload failed'))
+          setStaged((prev) => prev.map((s) => (s.localId === localId ? { ...s, uploading: false, error: message } : s)))
+        })
+    }
+  }
+
+  const removeStaged = (localId: string) => {
+    setStaged((prev) => {
+      const item = prev.find((s) => s.localId === localId)
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl)
+      if (item?.id) agents.attachments.remove(agent.id, item.id).catch(() => {})
+      return prev.filter((s) => s.localId !== localId)
+    })
+  }
+
   const send = async (overrideText?: string) => {
     const trimmed = (overrideText ?? input).trim()
-    if (!trimmed || streaming) return
+    if (streaming) return
+    // A photo/PDF with no caption is a valid message on its own — only
+    // block when there's neither text nor any (successfully uploaded)
+    // attachment to send.
+    const readyAttachments = staged.filter((s) => s.id && !s.uploading)
+    if (!trimmed && readyAttachments.length === 0) return
+    // Still-uploading files: make the user wait rather than silently
+    // sending without them.
+    if (staged.some((s) => s.uploading)) return
     setInput('')
     setLastError(null)
     setStreaming(true)
+    const sentAttachments = staged
+    setStaged([])
     // User just took an action — they want to see the response.
     isAtBottomRef.current = true
     let errorThisTurn: string | null = null
@@ -200,7 +268,7 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
     // streaming completes successfully.
     const startedFresh = !conversationId
     const localId = crypto.randomUUID()
-    setPendingUser({ id: 'pending-user-' + localId, role: 'user', text: trimmed, tools: [] })
+    setPendingUser({ id: 'pending-user-' + localId, role: 'user', text: trimmed, tools: [], attachments: sentAttachments })
     setDraft({ id: 'draft-' + localId, role: 'assistant', text: '', tools: [], pending: true })
     try {
       await streamChat({
@@ -208,6 +276,7 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
         content: trimmed,
         conversationId,
         pageContext: getPageContext?.() ?? null,
+        attachmentIds: readyAttachments.map((s) => s.id as string),
         onEvent: (ev: AgentStreamEvent) => {
           if (ev.kind === 'conversation') {
             activeConvId = ev.conversation_id
@@ -254,6 +323,7 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
       qc.invalidateQueries({ queryKey: ['agent-conversations'] })
       setPendingUser(null)
       setDraft(null)
+      sentAttachments.forEach((s) => s.previewUrl && URL.revokeObjectURL(s.previewUrl))
       if (errorThisTurn) setLastError(errorThisTurn)
       // After the very first round of a brand-new conversation, ask the
       // backend to summarize the exchange into a short title via the
@@ -314,7 +384,14 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
           ) && (
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-lg px-3 py-2 bg-primary text-primary-foreground">
-              <div className="whitespace-pre-wrap text-sm">{pendingUser.text}</div>
+              {!!pendingUser.attachments?.length && (
+                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                  {pendingUser.attachments.map((a) => (
+                    <StagedThumb key={a.localId} attachment={a} />
+                  ))}
+                </div>
+              )}
+              {pendingUser.text && <div className="whitespace-pre-wrap text-sm">{pendingUser.text}</div>}
             </div>
           </div>
         )}
@@ -393,7 +470,36 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
           )}
         </div>
       )}
-      <div className="shrink-0 border-t p-3 flex items-end gap-2 bg-background">
+      {staged.length > 0 && (
+        <div className="shrink-0 px-3 pt-2 flex flex-wrap gap-1.5 bg-background border-t">
+          {staged.map((s) => (
+            <StagedThumb key={s.localId} attachment={s} onRemove={() => removeStaged(s.localId)} />
+          ))}
+        </div>
+      )}
+      <div className={cn('shrink-0 p-3 flex items-end gap-2 bg-background', staged.length === 0 && 'border-t')}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPTED_ATTACHMENT_TYPES}
+          className="hidden"
+          onChange={(e) => {
+            onFilesSelected(e.target.files)
+            e.target.value = '' // allow picking the same file again later
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={streaming}
+          className="shrink-0"
+          aria-label={t('agents.chat.attachFile', 'Attach a photo or file')}
+          title={t('agents.chat.attachFile', 'Attach a photo or file')}
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
         <textarea
           ref={inputRef}
           value={input}
@@ -443,11 +549,122 @@ export function ChatPanel({ agent, conversationId, onConversationCreated, focusS
             {speech.listening ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>
         )}
-        <Button onClick={() => send()} disabled={streaming || !input.trim()} className="shrink-0">
+        <Button
+          onClick={() => send()}
+          disabled={streaming || (!input.trim() && staged.filter((s) => s.id && !s.uploading).length === 0) || staged.some((s) => s.uploading)}
+          className="shrink-0"
+        >
           {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
     </div>
+  )
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** One attachment chip, used both in the pre-send staging row and in the
+ * optimistic "pendingUser" bubble. Images show their local blob: preview
+ * (no server round trip needed pre-send); PDFs show a generic icon. */
+function StagedThumb({ attachment, onRemove }: { attachment: StagedAttachment; onRemove?: () => void }) {
+  const isImage = attachment.mime.startsWith('image/')
+  return (
+    <div
+      className={cn(
+        'relative group h-14 w-14 rounded-md border overflow-hidden flex items-center justify-center bg-muted shrink-0',
+        attachment.error && 'border-rose-400',
+      )}
+      title={attachment.error ? `${attachment.filename}: ${attachment.error}` : `${attachment.filename} (${formatFileSize(attachment.size_bytes)})`}
+    >
+      {isImage && attachment.previewUrl ? (
+        <img src={attachment.previewUrl} alt={attachment.filename} className="h-full w-full object-cover" />
+      ) : (
+        <FileText className="h-5 w-5 text-muted-foreground" />
+      )}
+      {attachment.uploading && (
+        <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </div>
+      )}
+      {attachment.error && !attachment.uploading && (
+        <div className="absolute inset-0 bg-rose-950/60 flex items-center justify-center">
+          <AlertCircle className="h-4 w-4 text-rose-200" />
+        </div>
+      )}
+      {onRemove && !attachment.uploading && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-background/90 border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** An attachment already on a persisted message — fetches its bytes
+ * through the authenticated endpoint (images render inline; anything
+ * else, currently just PDFs, shows a filename chip with a download
+ * click-through). */
+function HistoryAttachmentThumb({ agentId, attachment }: { agentId: string; attachment: ChatAttachmentMeta }) {
+  const isImage = attachment.mime.startsWith('image/')
+  const [url, setUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isImage) return
+    let objectUrl: string | null = null
+    let cancelled = false
+    agents.attachments.fetchBlob(agentId, attachment.id).then((blob) => {
+      if (cancelled) return
+      objectUrl = URL.createObjectURL(blob)
+      setUrl(objectUrl)
+    }).catch(() => {})
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [agentId, attachment.id, isImage])
+
+  const openFile = async () => {
+    try {
+      const blob = await agents.attachments.fetchBlob(agentId, attachment.id)
+      const objectUrl = URL.createObjectURL(blob)
+      window.open(objectUrl, '_blank')
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+    } catch {
+      // best-effort — no toast plumbing in this component
+    }
+  }
+
+  if (isImage) {
+    return (
+      <button type="button" onClick={openFile} className="h-20 w-20 rounded-md border overflow-hidden bg-muted/50 shrink-0">
+        {url ? (
+          <img src={url} alt={attachment.filename} className="h-full w-full object-cover" />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          </div>
+        )}
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={openFile}
+      className="flex items-center gap-1.5 px-2 py-1.5 rounded-md border bg-muted/50 text-xs max-w-[180px]"
+      title={attachment.filename}
+    >
+      <FileIcon className="h-3.5 w-3.5 shrink-0" />
+      <span className="truncate">{attachment.filename}</span>
+    </button>
   )
 }
 
@@ -478,7 +695,14 @@ function HistoryView({ agent, history }: { agent: Agent; history: AgentMessage[]
             return (
               <div key={m.id} className="flex justify-end">
                 <div className="max-w-[80%] rounded-lg px-3 py-2 bg-primary text-primary-foreground">
-                  <div className="whitespace-pre-wrap text-sm">{m.content}</div>
+                  {!!m.attachments?.length && (
+                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                      {m.attachments.map((a) => (
+                        <HistoryAttachmentThumb key={a.id} agentId={agent.id} attachment={a} />
+                      ))}
+                    </div>
+                  )}
+                  {m.content && <div className="whitespace-pre-wrap text-sm">{m.content}</div>}
                 </div>
               </div>
             )

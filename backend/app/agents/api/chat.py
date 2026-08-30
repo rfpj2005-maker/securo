@@ -81,6 +81,7 @@ async def chat(
                 user_message=body.content,
                 channel=body.channel,
                 page_context=body.page_context,
+                attachment_ids=body.attachment_ids or None,
             ):
                 yield _format_event(ev)
         except Exception as exc:  # noqa: BLE001

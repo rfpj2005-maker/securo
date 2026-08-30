@@ -24,6 +24,8 @@ export interface SendMessageOptions {
   // system primer so the agent can answer "what about this row?" style
   // questions. Built by the global slide-over from page registrations.
   pageContext?: Record<string, unknown> | null
+  // Ids from a prior POST /agents/{id}/attachments upload.
+  attachmentIds?: string[]
   signal?: AbortSignal
   onEvent: (ev: AgentStreamEvent) => void
 }
@@ -48,6 +50,7 @@ export async function streamChat(opts: SendMessageOptions): Promise<void> {
       conversation_id: opts.conversationId ?? null,
       channel: opts.channel ?? 'web',
       page_context: opts.pageContext ?? null,
+      attachment_ids: opts.attachmentIds ?? [],
     }),
   })
 

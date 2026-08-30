@@ -112,6 +112,7 @@ async def append_message(
     tool_calls: Optional[list[Any]] = None,
     tool_result: Optional[dict[str, Any]] = None,
     citations: Optional[list[Any]] = None,
+    attachments: Optional[list[dict[str, Any]]] = None,
     input_tokens: Optional[int] = None,
     output_tokens: Optional[int] = None,
 ) -> Message:
@@ -128,6 +129,7 @@ async def append_message(
         tool_calls=tool_calls,
         tool_result=tool_result,
         citations=citations,
+        attachments=attachments,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
     )

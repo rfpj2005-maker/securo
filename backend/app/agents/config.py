@@ -64,6 +64,13 @@ class AgentSettings(BaseSettings):
     knowledge_storage_path: str = "/app/data/agent_knowledge"
     knowledge_max_file_size_mb: int = 25
 
+    # Where photos/files attached to a chat message live on disk. Separate
+    # from knowledge_storage_path: these aren't indexed/embedded, they're
+    # sent to the LLM as-is (image/document content blocks) for the turn
+    # they were attached to (and resent on later turns via history replay).
+    chat_attachments_storage_path: str = "/app/data/chat_attachments"
+    chat_attachment_max_file_size_mb: int = 20
+
     # Same env_file pair as the main Settings: the CWD-relative ".env" for
     # backward compatibility plus the anchored backend/.env, so the API and the
     # Celery worker/beat read the same file whatever directory they start from.

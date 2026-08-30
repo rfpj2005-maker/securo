@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageRead(BaseModel):
@@ -17,6 +17,7 @@ class MessageRead(BaseModel):
     tool_calls: Optional[list[Any]]
     tool_result: Optional[dict[str, Any]]
     citations: Optional[list[Any]]
+    attachments: Optional[list[Any]]
     input_tokens: Optional[int]
     output_tokens: Optional[int]
     created_at: datetime
@@ -42,3 +43,6 @@ class SendMessageRequest(BaseModel):
     # context-aware questions like "what about THIS row?". Format is
     # free-form — the frontend builds it from the active page.
     page_context: Optional[dict[str, Any]] = None
+    # Ids from a prior POST /{agent_id}/attachments upload — the file(s)
+    # the user attached to this specific message.
+    attachment_ids: list[uuid.UUID] = Field(default_factory=list)

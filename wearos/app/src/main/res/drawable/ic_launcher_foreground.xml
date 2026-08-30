@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder mark: a simple "S". Replace with a real exported asset
+     from the Securo brand kit before shipping this anywhere beyond your
+     own wrist. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,34 C40,28 46,24 54,24 C62,24 68,28 68,34 C68,40 62,42 54,44 C42,47 34,52 34,62 C34,72 42,80 54,80 C64,80 70,76 70,68"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="8"
+        android:strokeLineCap="round" />
+</vector>

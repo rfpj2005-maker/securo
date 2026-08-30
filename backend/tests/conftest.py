@@ -565,7 +565,8 @@ def _mock_redis():
     with patch("app.core.redis.get_redis", _fake_get_redis), \
          patch("app.core.rate_limit.get_redis", _fake_get_redis), \
          patch("app.api.custom_auth.get_redis", _fake_get_redis), \
-         patch("app.api.two_factor.get_redis", _fake_get_redis):
+         patch("app.api.two_factor.get_redis", _fake_get_redis), \
+         patch("app.api.watch_pairing.get_redis", _fake_get_redis):
         yield mock
 
     redis_mod._redis = original

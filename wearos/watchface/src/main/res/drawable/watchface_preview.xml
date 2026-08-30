@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder preview shown in the watch face picker — a plain dark
+     circle with the time-of-day text roughly where it renders. Swap for
+     a real screenshot once you've seen the face running on the watch. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+    <path android:fillColor="#0B0B12" android:pathData="M0,0h200v200h-200z" />
+    <path
+        android:fillColor="#4F46E5"
+        android:pathData="M60,105 C60,95 72,88 88,88 C104,88 116,95 116,105 C116,113 106,117 90,121 C68,127 54,136 54,150 C54,164 68,174 88,174 C104,174 114,168 114,158" />
+</vector>

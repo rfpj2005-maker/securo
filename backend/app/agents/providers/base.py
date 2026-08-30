@@ -61,6 +61,12 @@ class ChatMessage:
     # For role="tool":
     tool_call_id: Optional[str] = None
     name: Optional[str] = None
+    # For role="user": photos/PDFs attached to this turn. Each dict is
+    # {"mime": str, "data_b64": str}. Only providers with
+    # supports_attachments=True embed these; others ignore them (the
+    # executor refuses the request up front instead of silently dropping
+    # files the user attached — see runtime/executor.py).
+    attachments: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -80,13 +86,21 @@ class Usage:
 @dataclass
 class ChatChunk:
     """Streaming event. Exactly one of these fields is populated per chunk."""
-    type: Literal["text_delta", "tool_call_start", "tool_call_args_delta", "tool_call_end", "finish", "usage"]
+    type: Literal[
+        "text_delta", "tool_call_start", "tool_call_args_delta", "tool_call_end", "finish", "usage",
+        # Server-executed tools (e.g. Anthropic's built-in web search): the
+        # provider runs these itself, so — unlike tool_call_*  — the
+        # executor must NOT dispatch them through MCP. Emitted once each,
+        # fully formed, rather than streamed incrementally.
+        "server_tool_call", "server_tool_result",
+    ]
     text: Optional[str] = None
     tool_call_id: Optional[str] = None
     tool_name: Optional[str] = None
     args_delta: Optional[str] = None  # incremental JSON args while streaming
     finish_reason: Optional[str] = None
     usage: Optional[Usage] = None
+    payload: Optional[str] = None  # JSON string: server_tool_call args / server_tool_result content
 
 
 @dataclass
@@ -104,6 +118,14 @@ class LLMProvider(ABC):
     supports_native_tools: bool = True
     # Embedding capability — Anthropic returns False, others True.
     supports_embeddings: bool = True
+    # Server-executed built-in tools (currently just Anthropic's native
+    # web search). False on providers that have no equivalent — the
+    # executor checks this before setting enable_web_search=True.
+    supports_web_search: bool = False
+    # Multi-modal message attachments (images/PDFs as content blocks).
+    # False on providers that have no equivalent — the executor checks
+    # this and errors out up front rather than silently dropping files.
+    supports_attachments: bool = False
 
     def __init__(self, *, api_key: str = "", base_url: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key
@@ -119,8 +141,14 @@ class LLMProvider(ABC):
         tools: Optional[list[ToolDefinition]] = None,
         temperature: float = 0.4,
         max_tokens: Optional[int] = None,
+        enable_web_search: bool = False,
     ) -> AsyncIterator[ChatChunk]:
-        """Yield streaming chunks. Implementations are async generators."""
+        """Yield streaming chunks. Implementations are async generators.
+
+        `enable_web_search` is a no-op on providers where
+        `supports_web_search` is False — accepted everywhere so the
+        executor can pass it uniformly without checking provider type.
+        """
         ...
 
     async def chat(
@@ -131,6 +159,7 @@ class LLMProvider(ABC):
         tools: Optional[list[ToolDefinition]] = None,
         temperature: float = 0.4,
         max_tokens: Optional[int] = None,
+        enable_web_search: bool = False,
     ) -> ChatResponse:
         """Convenience: collect a streaming response into one ChatResponse."""
         text_parts: list[str] = []
@@ -138,7 +167,8 @@ class LLMProvider(ABC):
         finish: str = "stop"
         usage = Usage()
         async for chunk in self.chat_stream(
-            messages, model=model, tools=tools, temperature=temperature, max_tokens=max_tokens
+            messages, model=model, tools=tools, temperature=temperature, max_tokens=max_tokens,
+            enable_web_search=enable_web_search,
         ):
             if chunk.type == "text_delta" and chunk.text:
                 text_parts.append(chunk.text)

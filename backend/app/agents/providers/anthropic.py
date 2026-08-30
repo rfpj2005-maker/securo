@@ -29,6 +29,15 @@ def _split_system(messages: list[ChatMessage]) -> tuple[Optional[str], list[Chat
     return ("\n\n".join(sys) if sys else None), rest
 
 
+def _attachment_block(att: dict) -> dict:
+    """One image/document content block from a {"mime", "data_b64"} dict."""
+    mime = att.get("mime") or "application/octet-stream"
+    source = {"type": "base64", "media_type": mime, "data": att.get("data_b64") or ""}
+    if mime == "application/pdf":
+        return {"type": "document", "source": source}
+    return {"type": "image", "source": source}
+
+
 def _serialize_messages(messages: list[ChatMessage]) -> list[dict]:
     """Anthropic Messages API: alternating user/assistant, tool results
     are user-role messages with content blocks."""
@@ -52,6 +61,15 @@ def _serialize_messages(messages: list[ChatMessage]) -> list[dict]:
                 blocks.append({"type": "tool_use", "id": tc.id, "name": tc.name, "input": tc.arguments})
             out.append({"role": "assistant", "content": blocks})
             continue
+        if m.role == "user" and m.attachments:
+            # Images/documents first, text last — Anthropic's recommended
+            # order so the model reads the attachment before the question
+            # about it.
+            blocks = [_attachment_block(a) for a in m.attachments]
+            if m.content:
+                blocks.append({"type": "text", "text": m.content})
+            out.append({"role": "user", "content": blocks})
+            continue
         out.append({"role": m.role, "content": m.content or ""})
     return out
 
@@ -60,6 +78,14 @@ def _serialize_tools(tools: Optional[list[ToolDefinition]]) -> Optional[list[dic
     if not tools:
         return None
     return [{"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tools]
+
+
+# Anthropic's server-executed web search. Runs on Anthropic's side (no
+# round trip through our MCP layer) and is billed separately from
+# tokens (~$10/1,000 searches as of this writing) — max_uses caps that
+# per assistant turn regardless of how many search-worthy questions the
+# model thinks it sees.
+_WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 5}
 
 
 def _raise_for_status(status: int, body: str) -> None:
@@ -76,6 +102,8 @@ def _raise_for_status(status: int, body: str) -> None:
 class AnthropicProvider(LLMProvider):
     name = "anthropic"
     supports_embeddings = False
+    supports_web_search = True
+    supports_attachments = True
 
     def __init__(self, *, api_key: str, base_url: str = "https://api.anthropic.com/v1", model: Optional[str] = None):
         super().__init__(api_key=api_key, base_url=base_url, model=model)
@@ -95,6 +123,7 @@ class AnthropicProvider(LLMProvider):
         tools: Optional[list[ToolDefinition]] = None,
         temperature: float = 0.4,
         max_tokens: Optional[int] = None,
+        enable_web_search: bool = False,
     ) -> AsyncIterator[ChatChunk]:
         url = f"{self.base_url.rstrip('/')}/messages"
         system, rest = _split_system(messages)
@@ -106,8 +135,11 @@ class AnthropicProvider(LLMProvider):
         }
         if system:
             payload["system"] = system
-        if tools:
-            payload["tools"] = _serialize_tools(tools)
+        tools_payload = _serialize_tools(tools) or []
+        if enable_web_search:
+            tools_payload.append(dict(_WEB_SEARCH_TOOL))
+        if tools_payload:
+            payload["tools"] = tools_payload
 
         # Newer Claude models (e.g. reasoning-tier Sonnet 5) reject the
         # `temperature` field outright with a 400 "deprecated for this
@@ -147,12 +179,27 @@ class AnthropicProvider(LLMProvider):
                         if et == "content_block_start":
                             block = evt.get("content_block") or {}
                             idx = evt.get("index", 0)
-                            if block.get("type") == "tool_use":
+                            btype = block.get("type")
+                            if btype == "tool_use":
                                 tcid = block.get("id") or f"toolu_{idx}"
                                 open_block[idx] = {"kind": "tool", "id": tcid, "name": block.get("name") or ""}
                                 yield ChatChunk(type="tool_call_start", tool_call_id=tcid, tool_name=open_block[idx]["name"])
-                            elif block.get("type") == "text":
+                            elif btype == "text":
                                 open_block[idx] = {"kind": "text"}
+                            elif btype == "server_tool_use":
+                                # Anthropic-executed (e.g. web_search) — streams
+                                # input_json_delta like a real tool_use block, but
+                                # must NOT become a tool_call_start: the executor
+                                # would try to dispatch it through MCP. Buffer
+                                # args locally and emit once, on stop.
+                                open_block[idx] = {"kind": "server_tool", "name": block.get("name") or "", "args_buf": ""}
+                            elif btype == "web_search_tool_result":
+                                # Arrives fully formed — no deltas to wait for.
+                                yield ChatChunk(
+                                    type="server_tool_result",
+                                    tool_name="web_search",
+                                    payload=json.dumps(block.get("content") or block.get("content_block") or block, default=str),
+                                )
                         elif et == "content_block_delta":
                             idx = evt.get("index", 0)
                             delta = evt.get("delta") or {}
@@ -165,11 +212,15 @@ class AnthropicProvider(LLMProvider):
                                     tool_call_id=blk["id"],
                                     args_delta=delta.get("partial_json") or "",
                                 )
+                            elif delta.get("type") == "input_json_delta" and blk.get("kind") == "server_tool":
+                                blk["args_buf"] += delta.get("partial_json") or ""
                         elif et == "content_block_stop":
                             idx = evt.get("index", 0)
                             blk = open_block.pop(idx, None)
                             if blk and blk.get("kind") == "tool":
                                 yield ChatChunk(type="tool_call_end", tool_call_id=blk["id"])
+                            elif blk and blk.get("kind") == "server_tool":
+                                yield ChatChunk(type="server_tool_call", tool_name=blk.get("name"), payload=blk.get("args_buf") or "{}")
                         elif et == "message_delta":
                             u = (evt.get("usage") or {})
                             usage = Usage(

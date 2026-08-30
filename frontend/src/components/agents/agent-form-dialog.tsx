@@ -42,6 +42,7 @@ export function AgentFormDialog({ open, onOpenChange, agent }: Props) {
   const [temperature, setTemperature] = useState('0.4')
   const [autoContext, setAutoContext] = useState(true)
   const [isDefault, setIsDefault] = useState(false)
+  const [webSearch, setWebSearch] = useState(false)
 
   const { data: connections } = useQuery({
     queryKey: ['agent-connections'],
@@ -59,6 +60,7 @@ export function AgentFormDialog({ open, onOpenChange, agent }: Props) {
       setTemperature(String(agent.temperature ?? 0.4))
       setAutoContext(agent.auto_context ?? true)
       setIsDefault(agent.is_default ?? false)
+      setWebSearch(!!agent.extra?.web_search_enabled)
     } else {
       setName('')
       setDescription('')
@@ -70,6 +72,7 @@ export function AgentFormDialog({ open, onOpenChange, agent }: Props) {
       setTemperature('0.4')
       setAutoContext(true)
       setIsDefault(false)
+      setWebSearch(false)
     }
   }, [agent, open])
 
@@ -118,6 +121,7 @@ export function AgentFormDialog({ open, onOpenChange, agent }: Props) {
       temperature: Number(temperature) || 0.4,
       auto_context: autoContext,
       is_default: isDefault,
+      extra: { ...(agent?.extra ?? {}), web_search_enabled: webSearch },
     })
   }
 
@@ -240,6 +244,20 @@ export function AgentFormDialog({ open, onOpenChange, agent }: Props) {
                 {t('agents.form.autoContext')}
               </Label>
               <p className="text-xs text-muted-foreground mt-0.5">{t('agents.form.autoContextHint')}</p>
+            </div>
+          </div>
+          <div className="rounded-md border p-3 flex items-start gap-3">
+            <Switch checked={webSearch} onCheckedChange={(v) => setWebSearch(!!v)} />
+            <div className="min-w-0 flex-1">
+              <Label className="cursor-pointer" onClick={() => setWebSearch(!webSearch)}>
+                {t('agents.form.webSearch', 'Busca na web')}
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t(
+                  'agents.form.webSearchHint',
+                  'Deixa o agente pesquisar na internet quando precisar (preços, notícias, o que não está nos dados do Securo). Só funciona com conexão Anthropic; cobrança extra por busca.',
+                )}
+              </p>
             </div>
           </div>
           <div className="rounded-md border p-3 flex items-start gap-3">

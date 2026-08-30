@@ -117,6 +117,7 @@ class OpenAIProvider(LLMProvider):
         tools: Optional[list[ToolDefinition]] = None,
         temperature: float = 0.4,
         max_tokens: Optional[int] = None,
+        enable_web_search: bool = False,  # not supported here — see supports_web_search
     ) -> AsyncIterator[ChatChunk]:
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload: dict = {

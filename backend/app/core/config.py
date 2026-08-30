@@ -132,6 +132,14 @@ class Settings(BaseSettings):
     camera_api_base_url: str = ""
     camera_api_key: SecretStr = SecretStr("")
 
+    # Nuvem JTi API (Amparar's cloud PABX) — used by the "pabx_*" agent
+    # tools and the /api/pabx dashboard. Dedicated API user provisioned by
+    # Nuvem JTi support (not a personal login). Auth is a static
+    # usuario+token pair sent as headers — no refresh flow needed, unlike
+    # Siprov's bearer token. Company-wide, not workspace-scoped.
+    nuvemjti_api_usuario: str = ""
+    nuvemjti_api_token: SecretStr = SecretStr("")
+
     # Google Calendar OAuth2 (view/create/edit events from Securo).
     # Create at console.cloud.google.com: enable the Calendar API, configure
     # the OAuth consent screen, then create a Web application OAuth client

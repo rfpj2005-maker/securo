@@ -21,4 +21,5 @@ from mcp_server.tools import (  # noqa: F401
     email_imap,
     meetings,
     cameras,
+    nuvemjti,
 )

@@ -15,5 +15,6 @@ export function useFeatureFlags() {
   return {
     isLoading,
     agentsEnabled: !!data?.features?.agents,
+    pabxEnabled: !!data?.features?.pabx_amparar,
   }
 }

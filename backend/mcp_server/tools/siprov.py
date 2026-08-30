@@ -19,10 +19,20 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.services.workspace_service import is_business_member
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
 
 _BASE_URL = "https://acesso.siprov.com.br/siprov-api"
+
+
+async def _require_business_member(session: AsyncSession, ctx: CallContext) -> None:
+    """Siprov is Amparar's own business system (associados, financeiro) —
+    mirrors the same reasoning as cameras/PABX. A personal-only user
+    could otherwise enable these tools on their own agent and query real
+    associado/financial data that has nothing to do with them."""
+    if not await is_business_member(session, ctx.user_id):
+        raise PermissionError("Siprov tools are only available to business workspace members.")
 
 # Module-level cache: {"token": str, "expires_at": float (unix seconds)}.
 # One Siprov account for the whole instance, so a single shared cache is
@@ -98,6 +108,88 @@ async def _siprov_get(path: str, params: Optional[dict[str, Any]] = None) -> Any
         return resp.json()
 
 
+async def _siprov_post(path: str, json_body: dict[str, Any]) -> Any:
+    """POST against the Siprov API with a cached bearer token, retrying once
+    on 401. Used for the report-generation endpoints (see
+    _siprov_generate_report) — everything else in this file is read-only."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        token = await _get_token(client)
+        resp = await client.post(
+            f"{_BASE_URL}{path}", headers={"authorization": f"Bearer {token}"}, json=json_body
+        )
+        if resp.status_code == 401:
+            token = await _get_token(client, force=True)
+            resp = await client.post(
+                f"{_BASE_URL}{path}", headers={"authorization": f"Bearer {token}"}, json=json_body
+            )
+        resp.raise_for_status()
+        return resp.json()
+
+
+_REPORT_POLL_INTERVAL_SECONDS = 2
+_REPORT_POLL_MAX_ATTEMPTS = 30  # 60s ceiling — a 69-row adesão report finished in ~4-6s live
+
+
+async def _siprov_generate_report(base_path: str, body: dict[str, Any]) -> Any:
+    """Siprov's report endpoints (adesão, financeiro) are async, not a plain
+    GET — confirmed live against the real API (a bare GET on `base_path`,
+    which is what this file used to do, hits "Recuperar Parâmetros de
+    Adesão" — the report's PARAMETER schema, not any data, which is why it
+    always looked empty). The real flow:
+
+        1. POST base_path with the filter body -> {codRelatorio, ...}
+        2. OPTIONS base_path/{codRelatorio} -> {situacao: PENDENTE|PROCESSANDO|FINALIZADO|CANCELADO, ...}
+           poll this until it's done generating.
+        3. GET base_path/{codRelatorio} -> the actual rows (when formato=JSON).
+
+    Siprov returns `situacao` upper-cased ("FINALIZADO") even though its
+    own OpenAPI spec documents the enum as Title-case ("Finalizado") — the
+    comparisons below are case-insensitive so a spelling drift either way
+    doesn't quietly break this again.
+    """
+    started = await _siprov_post(base_path, {k: v for k, v in body.items() if v is not None})
+    cod_relatorio = started.get("codRelatorio")
+    if cod_relatorio is None:
+        raise RuntimeError(f"Siprov did not return codRelatorio when generating a report: {started}")
+
+    detail_path = f"{base_path}/{cod_relatorio}"
+    situacao = str(started.get("situacao") or "").upper()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        token = await _get_token(client)
+        for _ in range(_REPORT_POLL_MAX_ATTEMPTS):
+            if situacao in ("FINALIZADO", "CANCELADO"):
+                break
+            await asyncio.sleep(_REPORT_POLL_INTERVAL_SECONDS)
+            resp = await client.request(
+                "OPTIONS", f"{_BASE_URL}{detail_path}", headers={"authorization": f"Bearer {token}"}
+            )
+            resp.raise_for_status()
+            situacao = str(resp.json().get("situacao") or "").upper()
+
+    if situacao != "FINALIZADO":
+        raise RuntimeError(
+            f"Siprov report {cod_relatorio} didn't finish generating in time (situacao={situacao})"
+        )
+    return await _siprov_get(detail_path)
+
+
+# Report responses can run to hundreds of rows — same reasoning as
+# siprov_boletos: dumping everything into the LLM's context is wasteful
+# when it usually wants a count, not every row.
+_REPORT_ITEMS_CAP = 50
+
+
+def _cap_report_items(items: Any) -> dict[str, Any]:
+    if not isinstance(items, list):
+        return {"quantidade": 0, "itens": [], "itens_omitidos": 0}
+    return {
+        "quantidade": len(items),
+        "itens": items[:_REPORT_ITEMS_CAP],
+        "itens_omitidos": max(0, len(items) - _REPORT_ITEMS_CAP),
+    }
+
+
 _NOME_FIELD_CANDIDATES = ("nome", "nomeAssociado", "nomeCompleto", "nomePessoa")
 
 
@@ -133,6 +225,7 @@ _MAX_NOME_PAGES = 20  # 20 * 1000 = 20k associados, comfortably above the real t
 async def siprov_buscar_associado(
     *, session: AsyncSession, ctx: CallContext, nome: str | None = None, cpf: str | None = None, placa: str | None = None
 ) -> Any:
+    await _require_business_member(session, ctx)
     if not nome and not cpf and not placa:
         raise ValueError("Provide at least one of: nome, cpf, placa")
     if nome:
@@ -196,6 +289,7 @@ async def siprov_eventos(
     data_evento_inicial: str | None = None,
     data_evento_final: str | None = None,
 ) -> Any:
+    await _require_business_member(session, ctx)
     return await _siprov_get(
         "/ext/evento",
         {
@@ -227,6 +321,7 @@ async def siprov_eventos(
     tags=["read", "siprov"],
 )
 async def siprov_titulos_financeiros(*, session: AsyncSession, ctx: CallContext, tipo: str) -> Any:
+    await _require_business_member(session, ctx)
     return await _siprov_get("/ext/financeiro/titulo", {"tipo": tipo})
 
 
@@ -285,6 +380,7 @@ async def siprov_boletos(
     data_vencimento_final: str,
     situacao: str | list[str] | None = None,
 ) -> Any:
+    await _require_business_member(session, ctx)
     base_params = {
         "dataVencimentoInicial": data_vencimento_inicial,
         "dataVencimentoFinal": data_vencimento_final,
@@ -318,21 +414,140 @@ async def siprov_boletos(
 @tool(
     name="siprov_relatorio_adesao",
     description=(
-        "Pull the adesão (enrollment) report — useful for portfolio growth, new "
-        "associados, and cancellations over time."
+        "Generate and pull Siprov's adesão report — bulk data by cancellation or "
+        "enrollment date, not a single associado. Use this for 'how many cancelled "
+        "in August', 'list of cancellations this month', portfolio growth, etc. "
+        "Slower than the other siprov_* tools (Siprov generates the report "
+        "asynchronously, this polls until it's ready — usually a few seconds). "
+        "cod_layout defaults to 4008 ('LISTA DE CANCELADOS'), the only layout "
+        "confirmed working — it returns cancellations, not new enrollments. If a "
+        "user needs a different report shape (new adesões, etc.), a different "
+        "cod_layout would need to be found in Siprov's own report configuration "
+        "first; don't guess a value that hasn't been confirmed.\n\n"
+        "IMPORTANT: omitting BOTH date_cancelamento_* and data_adesao_* does not "
+        "mean 'no filter, show recent activity' — it returns Siprov's ENTIRE "
+        "historical dataset for this layout (thousands of rows), mixing every "
+        "benefício status (Ativo, Cancelado, Substituído, Negativado, "
+        "Inadimplente...), not just cancellations. For any date-scoped question "
+        "('this month', 'in August', etc.) always pass "
+        "data_cancelamento_inicial/data_cancelamento_final — that's what actually "
+        "narrows the result. `quantidade` in the response is the true total "
+        "count (computed from Siprov's own report metadata) — trust it over "
+        "counting `itens`, which is capped at 50 for context size; "
+        "`itens_omitidos` says how many more exist beyond that."
     ),
-    parameters={"type": "object", "properties": {}, "additionalProperties": False},
+    parameters={
+        "type": "object",
+        "properties": {
+            "cod_layout": {"type": "integer", "description": "Siprov report layout id. Default 4008 = cancellations."},
+            "data_cancelamento_inicial": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_cancelamento_final": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_adesao_inicial": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_adesao_final": {"type": "string", "description": "dd/MM/yyyy"},
+        },
+        "additionalProperties": False,
+    },
     tags=["read", "siprov"],
 )
-async def siprov_relatorio_adesao(*, session: AsyncSession, ctx: CallContext) -> Any:
-    return await _siprov_get("/ext/relatorio/adesao")
+async def siprov_relatorio_adesao(
+    *,
+    session: AsyncSession,
+    ctx: CallContext,
+    cod_layout: int = 4008,
+    data_cancelamento_inicial: str | None = None,
+    data_cancelamento_final: str | None = None,
+    data_adesao_inicial: str | None = None,
+    data_adesao_final: str | None = None,
+) -> Any:
+    await _require_business_member(session, ctx)
+    # Enforced, not just documented: a prose warning in the description is
+    # easy for a smaller/local model to skip. Omitting every date filter
+    # doesn't mean "no filter, show me something reasonable" — it means
+    # Siprov's entire historical dataset for this layout (thousands of
+    # rows, every benefício status mixed together), which is never what a
+    # date-scoped question ("cancelled in August") actually wants. Reject
+    # it outright so the agent gets an explicit, actionable error instead
+    # of silently the wrong (much bigger, unfiltered) answer.
+    if not any(
+        (data_cancelamento_inicial, data_cancelamento_final, data_adesao_inicial, data_adesao_final)
+    ):
+        raise ValueError(
+            "At least one date filter is required (data_cancelamento_inicial/"
+            "data_cancelamento_final for cancellations, or data_adesao_inicial/"
+            "data_adesao_final for enrollments). Without one, this would return "
+            "Siprov's entire historical dataset for this layout — thousands of "
+            "rows mixing every benefício status (Ativo, Cancelado, Substituído, "
+            "Negativado, Inadimplente...), not a date-scoped answer. Pick a "
+            "range that actually covers what was asked."
+        )
+    items = await _siprov_generate_report(
+        "/ext/relatorio/adesao",
+        {
+            "codLayout": cod_layout,
+            "formato": "JSON",
+            "dataCancelamentoInicial": data_cancelamento_inicial,
+            "dataCancelamentoFinal": data_cancelamento_final,
+            "dataAdesaoInicial": data_adesao_inicial,
+            "dataAdesaoFinal": data_adesao_final,
+        },
+    )
+    return _cap_report_items(items)
 
 
 @tool(
     name="siprov_relatorio_financeiro",
-    description="Pull Siprov's built-in financial report (faturamento, recebimentos, etc.).",
-    parameters={"type": "object", "properties": {}, "additionalProperties": False},
+    description=(
+        "Generate and pull Siprov's financial report (faturamento, recebimentos, etc.) — "
+        "bulk data by date range, not a single título (see siprov_titulos_financeiros/"
+        "siprov_boletos for that). cod_layout must be a report layout id configured in "
+        "Siprov — there is no confirmed default for this one, unlike siprov_relatorio_adesao. "
+        "If you don't have a cod_layout, ask the user or check Siprov's report configuration "
+        "rather than guessing. Slower than the other siprov_* tools (Siprov generates the "
+        "report asynchronously, this polls until it's ready)."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "cod_layout": {"type": "integer", "description": "Siprov report layout id — no confirmed default"},
+            "tipo_lancamento": {"type": "string", "enum": ["Débito", "Crédito", "Rateio"]},
+            "data_vencimento_inicial": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_vencimento_final": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_liquidacao_inicial": {"type": "string", "description": "dd/MM/yyyy"},
+            "data_liquidacao_final": {"type": "string", "description": "dd/MM/yyyy"},
+            "situacao_titulo": {
+                "type": "array",
+                "items": {"type": "string", "enum": _BOLETO_SITUACOES},
+            },
+        },
+        "required": ["cod_layout", "tipo_lancamento"],
+        "additionalProperties": False,
+    },
     tags=["read", "siprov"],
 )
-async def siprov_relatorio_financeiro(*, session: AsyncSession, ctx: CallContext) -> Any:
-    return await _siprov_get("/ext/relatorio/financeiro")
+async def siprov_relatorio_financeiro(
+    *,
+    session: AsyncSession,
+    ctx: CallContext,
+    cod_layout: int,
+    tipo_lancamento: str,
+    data_vencimento_inicial: str | None = None,
+    data_vencimento_final: str | None = None,
+    data_liquidacao_inicial: str | None = None,
+    data_liquidacao_final: str | None = None,
+    situacao_titulo: list[str] | None = None,
+) -> Any:
+    await _require_business_member(session, ctx)
+    items = await _siprov_generate_report(
+        "/ext/relatorio/financeiro",
+        {
+            "codLayout": cod_layout,
+            "formato": "JSON",
+            "tipoLancamento": tipo_lancamento,
+            "dataVencimentoInicial": data_vencimento_inicial,
+            "dataVencimentoFinal": data_vencimento_final,
+            "dataLiquidacaoInicial": data_liquidacao_inicial,
+            "dataLiquidacaoFinal": data_liquidacao_final,
+            "situacaoTitulo": situacao_titulo,
+        },
+    )
+    return _cap_report_items(items)

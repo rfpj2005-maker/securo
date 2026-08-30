@@ -14,6 +14,7 @@ from app.api.categories import router as categories_router
 from app.api.category_groups import router as category_groups_router
 from app.api.connections import router as connections_router
 from app.api.custom_auth import router as custom_auth_router
+from app.api.watch_pairing import router as watch_pairing_router
 from app.api.dashboard import router as dashboard_router
 from app.api.import_logs import router as import_logs_router
 from app.api.oidc_auth import router as oidc_auth_router
@@ -37,6 +38,8 @@ from app.api.gmail import router as gmail_router
 from app.api.email_connections import router as email_connections_router
 from app.api.attachments import router as attachments_router
 from app.api.cameras import router as cameras_router
+from app.api.pabx import router as pabx_router
+from app.api.webhooks import router as webhooks_router
 from app.api.fiscal import router as fiscal_router
 from app.api.payees import router as payees_router
 from app.api.push import router as push_router
@@ -159,6 +162,12 @@ app.include_router(
     prefix="/api/auth",
     tags=["auth"],
 )
+app.include_router(
+    watch_pairing_router,
+    prefix="/api/auth",
+    tags=["auth"],
+    dependencies=[Depends(login_rate_limit)],
+)
 app.include_router(oidc_auth_router)
 app.include_router(
     fastapi_users.get_register_router(UserRead, UserCreate),
@@ -216,6 +225,8 @@ app.include_router(email_connections_router)
 app.include_router(meetings_router)
 app.include_router(push_router)
 app.include_router(cameras_router)
+app.include_router(pabx_router)
+app.include_router(webhooks_router)
 app.include_router(settings_router)
 app.include_router(workspaces_router)
 app.include_router(admin_router)
@@ -233,6 +244,7 @@ if os.getenv("AGENTS_ENABLED", "false").strip().lower() in ("1", "true", "yes", 
         from app.agents.api.conversations import router as agents_conversations_router
         from app.agents.api.chat import router as agents_chat_router
         from app.agents.api.knowledge import router as agents_knowledge_router
+        from app.agents.api.attachments import router as agents_attachments_router
         from app.agents.api.mcp_tokens import router as agents_mcp_tokens_router
 
         # Mount literal-prefix routers (conversations, connections,
@@ -245,6 +257,7 @@ if os.getenv("AGENTS_ENABLED", "false").strip().lower() in ("1", "true", "yes", 
         app.include_router(agents_router)
         app.include_router(agents_chat_router)
         app.include_router(agents_knowledge_router)
+        app.include_router(agents_attachments_router)
         logger.info("Agents feature enabled — mounted /api/agents routes")
     except Exception:
         logger.exception("Agents feature flag is on but import failed; routes not mounted")

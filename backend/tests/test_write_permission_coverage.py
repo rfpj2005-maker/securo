@@ -69,6 +69,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/workspaces/{workspace_id}/members"): "owner floor inside the handler",
     ("PATCH", "/api/workspaces/{workspace_id}/members/{member_user_id}"): "owner floor inside the handler",
     ("DELETE", "/api/workspaces/{workspace_id}/members/{member_user_id}"): "owner floor inside the handler",
+    ("PUT", "/api/workspaces/{workspace_id}/members/{member_user_id}/modules"): "owner floor inside the handler",
     # Deliberate: a POST that persists nothing. See the comment on the route.
     ("POST", "/api/transactions/import/preview"): "parses an upload and returns a preview; writes nothing",
     # The agents surface, mounted only when AGENTS_ENABLED is on (the test
@@ -105,6 +106,18 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/push/subscribe"): "the requester's own device's push subscription",
     ("POST", "/api/push/unsubscribe"): "the requester's own device's push subscription",
     ("POST", "/api/push/test"): "sends a test push to the requester's own device",
+    # External provider webhook: unauthenticated by design, the same way
+    # /login is — there is no Securo session to gate on because Pluggy,
+    # not a person, calls this. It verifies the payload against our own
+    # connection records (provider + external_id) before doing anything.
+    ("POST", "/api/webhooks/pluggy"): "unauthenticated by definition, called by Pluggy itself",
+    # Watch pairing: same family as /login and 2fa/verify above — a
+    # headless-device auth handshake, not workspace data. Listed
+    # unprefixed like /login and /2fa/* above — this router is reached
+    # through the same lazy-include wrapper that keeps route.path
+    # relative to the sub-router for this whole family.
+    ("POST", "/watch-pair/start"): "a short-lived pairing code for the requester's own account",
+    ("POST", "/watch-pair/redeem"): "unauthenticated: exchanges a one-time code for a session, same family as /login",
 }
 
 

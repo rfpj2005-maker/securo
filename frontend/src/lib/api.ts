@@ -61,6 +61,8 @@ import type {
   PushStatus,
   Camera,
   CameraRecording,
+  CameraLocationError,
+  PabxResumo,
   DashboardSummary,
   SpendingByCategory,
   MonthlyTrend,
@@ -160,6 +162,20 @@ export const workspaces = {
   removeMember: async (id: string, memberUserId: string): Promise<void> => {
     await api.delete(`/workspaces/${id}/members/${memberUserId}`)
   },
+  memberModules: async (id: string, memberUserId: string): Promise<{ hidden_modules: string[] }> => {
+    const { data } = await api.get(`/workspaces/${id}/members/${memberUserId}/modules`)
+    return data
+  },
+  setMemberModules: async (
+    id: string,
+    memberUserId: string,
+    hiddenModules: string[],
+  ): Promise<{ hidden_modules: string[] }> => {
+    const { data } = await api.put(`/workspaces/${id}/members/${memberUserId}/modules`, {
+      hidden_modules: hiddenModules,
+    })
+    return data
+  },
   stats: async (id: string): Promise<{ members: number; accounts: number; transactions: number }> => {
     const { data } = await api.get(`/workspaces/${id}/stats`)
     return data
@@ -211,6 +227,14 @@ export const auth = {
   },
   setup2fa: async (): Promise<{ secret: string; otpauth_uri: string }> => {
     const { data } = await api.post('/auth/2fa/setup')
+    return data
+  },
+  // Pairing code a headless companion device (currently: the Wear OS
+  // watch app) redeems for its own access token — see backend
+  // app/api/watch_pairing.py. The redeem call is device-side only, not
+  // called from this web app.
+  watchPairStart: async (): Promise<{ code: string; expires_in: number }> => {
+    const { data } = await api.post('/auth/watch-pair/start')
     return data
   },
   enable2fa: async (code: string): Promise<void> => {
@@ -1179,7 +1203,7 @@ export const push = {
 // transaction attachments) fetched as a blob and handed back as an object
 // URL — the caller must URL.revokeObjectURL() it when done.
 export const cameras = {
-  list: async (): Promise<Camera[]> => {
+  list: async (): Promise<(Camera | CameraLocationError)[]> => {
     const { data } = await api.get('/cameras')
     return data
   },
@@ -1199,12 +1223,28 @@ export const cameras = {
     const { data } = await api.get(`/cameras/search/${location}/${encodeURIComponent(cameraName)}`, { params })
     return data
   },
+  audioBlob: async (location: string, cameraName: string): Promise<Blob> => {
+    const { data } = await api.get(
+      `/cameras/audio/${location}/${encodeURIComponent(cameraName)}`,
+      { responseType: 'blob' },
+    )
+    return data
+  },
   recordingUrl: async (location: string, cameraName: string, filename: string): Promise<string> => {
     const { data } = await api.get(
       `/cameras/recording/${location}/${encodeURIComponent(cameraName)}/${encodeURIComponent(filename)}`,
       { responseType: 'blob' },
     )
     return URL.createObjectURL(data)
+  },
+}
+
+// Amparar's PABX (Nuvem JTi) call monitoring — company-wide, not
+// workspace-scoped, same reasoning as `cameras` above.
+export const pabx = {
+  resumo: async (dias: number = 7): Promise<PabxResumo> => {
+    const { data } = await api.get('/pabx/resumo', { params: { dias } })
+    return data
   },
 }
 
@@ -1570,7 +1610,7 @@ export const search = {
 
 // App-level feature flags (whether optional modules like agents are mounted)
 export interface AppInfo {
-  features: { agents: boolean; tesouro_direto?: boolean }
+  features: { agents: boolean; tesouro_direto?: boolean; pabx_amparar?: boolean }
 }
 
 export const info = {
@@ -1656,6 +1696,7 @@ export interface AgentMessage {
   tool_calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }> | null
   tool_result: { tool_call_id?: string; name?: string; data?: unknown; ok?: boolean } | null
   citations: unknown[] | null
+  attachments: ChatAttachmentMeta[] | null
   input_tokens: number | null
   output_tokens: number | null
   created_at: string
@@ -1667,6 +1708,13 @@ export interface AgentToolHandle {
   description: string
   is_proposal: boolean
   enabled: boolean
+}
+
+export interface ChatAttachmentMeta {
+  id: string
+  filename: string
+  mime: string
+  size_bytes: number
 }
 
 export interface KnowledgeDoc {
@@ -1757,6 +1805,23 @@ export const agents = {
     },
     remove: async (agentId: string, docId: string): Promise<void> => {
       await api.delete(`/agents/${agentId}/knowledge/${docId}`)
+    },
+  },
+  attachments: {
+    upload: async (agentId: string, file: File): Promise<ChatAttachmentMeta> => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const { data } = await api.post(`/agents/${agentId}/attachments`, fd)
+      return data
+    },
+    remove: async (agentId: string, attachmentId: string): Promise<void> => {
+      await api.delete(`/agents/${agentId}/attachments/${attachmentId}`)
+    },
+    // Blob fetch (not a plain <img src>) — the endpoint needs the auth
+    // header, same pattern as camera snapshots elsewhere in the app.
+    fetchBlob: async (agentId: string, attachmentId: string): Promise<Blob> => {
+      const { data } = await api.get(`/agents/${agentId}/attachments/${attachmentId}`, { responseType: 'blob' })
+      return data
     },
   },
   conversations: {

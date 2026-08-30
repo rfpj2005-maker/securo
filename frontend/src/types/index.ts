@@ -67,6 +67,10 @@ export interface Workspace {
   role: WorkspaceRole | null
   /** Modules this workspace shows. Resolved server-side; see lib/modules.ts. */
   enabled_modules: string[]
+  /** Securo's own destinations (tasks/calendar/meetings/cameras) this
+   *  member can see. Separate id space from enabled_modules — siprov is
+   *  intentionally not part of either list. */
+  enabled_features: string[]
 }
 
 export interface WorkspaceMember {
@@ -76,6 +80,9 @@ export interface WorkspaceMember {
   display_name: string | null
   role: WorkspaceRole
   joined_at: string
+  /** Module/feature ids an owner has explicitly hidden from this member.
+   *  Always empty for owners. */
+  hidden_modules: string[]
 }
 
 export interface UserPreferences {
@@ -1032,6 +1039,11 @@ export interface Camera {
   location: string
   id: number
   name: string
+  /** Display-only override for cameras whose real NVR name is stale
+   *  (renamed on-site, config not updated). Absent for everything else —
+   *  fall back to `name`. Recordings/snapshot lookups always use `name`,
+   *  never this. */
+  display_name?: string
   directory: string
   online: boolean
   connected: boolean
@@ -1041,8 +1053,39 @@ export interface Camera {
   hasRecordings: boolean
 }
 
+/** What `/api/cameras` sends instead of a location's cameras when that
+ *  location's recording server couldn't be reached at all (e.g. a
+ *  store's local machine is powered off) — one of these per unreachable
+ *  location, in place of its usual Camera entries. */
+export interface CameraLocationError {
+  location: string
+  error: string
+}
+
 export interface CameraRecording {
   filename: string
   size: number
   modified: string
+}
+
+// Mirrors backend/app/services/pabx_service.py's resumo_chamadas() shape.
+export interface PabxResumo {
+  gerado_em: string
+  periodo: { inicio: string; fim: string; dias: number }
+  totais: {
+    total_chamadas: number
+    atendidas: number
+    nao_atendidas: number
+    falhas: number
+    ocupado: number
+    // The operadora's own status categories can sum to more than
+    // total_chamadas (a known overlap) — surfaced so the UI can flag it
+    // instead of silently showing numbers that don't add up.
+    soma_categorias_diverge: boolean
+    duracao_media_segundos: number
+  }
+  por_dia: { dia: string; total: number }[]
+  top_dids: { did: string; total: number }[]
+  top_ramais: { ramal: string; total: number }[]
+  por_tipo_rota: { rota: string; total: number }[]
 }

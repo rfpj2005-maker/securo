@@ -11,6 +11,8 @@ import { ProtectedRoute } from '@/components/protected-route'
 import { AdminRoute } from '@/components/admin-route'
 import { AgentsRoute } from '@/components/agents-route'
 import { ModuleRoute } from '@/components/module-route'
+import { FeatureRoute } from '@/components/feature-route'
+import { SiprovAwareRoute } from '@/components/siprov-aware-route'
 import { AppLayout } from '@/components/app-layout'
 
 const SetupPage = lazy(() => import('@/pages/setup'))
@@ -35,6 +37,7 @@ const VoiceTaskPage = lazy(() => import('@/pages/voice-task'))
 const CalendarPage = lazy(() => import('@/pages/calendar'))
 const MeetingsPage = lazy(() => import('@/pages/meetings'))
 const CamerasPage = lazy(() => import('@/pages/cameras'))
+const PabxPage = lazy(() => import('@/pages/pabx'))
 const GroupsPage = lazy(() => import('@/pages/groups'))
 const GroupDetailPage = lazy(() => import('@/pages/group-detail'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/settings'))
@@ -103,11 +106,12 @@ function App() {
                   <Route path="/assets" element={<ModuleRoute module="assets"><AssetsPage /></ModuleRoute>} />
                   <Route path="/reports" element={<ModuleRoute module="reports"><ReportsPage /></ModuleRoute>} />
                   <Route path="/payees" element={<ModuleRoute module="payees"><PayeesPage /></ModuleRoute>} />
-                  <Route path="/tasks" element={<TasksPage />} />
-                  <Route path="/tasks/voice" element={<VoiceTaskPage />} />
-                  <Route path="/calendar" element={<CalendarPage />} />
-                  <Route path="/meetings" element={<MeetingsPage />} />
-                  <Route path="/cameras" element={<CamerasPage />} />
+                  <Route path="/tasks" element={<FeatureRoute feature="tasks"><TasksPage /></FeatureRoute>} />
+                  <Route path="/tasks/voice" element={<FeatureRoute feature="tasks"><VoiceTaskPage /></FeatureRoute>} />
+                  <Route path="/calendar" element={<FeatureRoute feature="calendar"><CalendarPage /></FeatureRoute>} />
+                  <Route path="/meetings" element={<FeatureRoute feature="meetings"><MeetingsPage /></FeatureRoute>} />
+                  <Route path="/cameras" element={<FeatureRoute feature="cameras"><CamerasPage /></FeatureRoute>} />
+                  <Route path="/pabx" element={<PabxPage />} />
                   <Route path="/groups" element={<ModuleRoute module="split_groups"><GroupsPage /></ModuleRoute>} />
                   <Route path="/groups/:id" element={<ModuleRoute module="split_groups"><GroupDetailPage /></ModuleRoute>} />
                   <Route path="/invoices" element={<ModuleRoute module="invoices"><InvoicesPage /></ModuleRoute>} />
@@ -115,7 +119,7 @@ function App() {
                   <Route path="/admin" element={<AdminRoute><AdminSettingsPage /></AdminRoute>} />
                   <Route path="/agents" element={<AgentsRoute><AgentsListPage /></AgentsRoute>} />
                   <Route path="/agents/connections" element={<AgentsRoute><AgentConnectionsPage /></AgentsRoute>} />
-                  <Route path="/agents/:id" element={<AgentsRoute><AgentDetailPage /></AgentsRoute>} />
+                  <Route path="/agents/:id" element={<AgentsRoute><SiprovAwareRoute><AgentDetailPage /></SiprovAwareRoute></AgentsRoute>} />
                 </Route>
               </Routes>
             </Suspense>

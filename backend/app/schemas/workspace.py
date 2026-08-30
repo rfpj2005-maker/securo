@@ -33,6 +33,11 @@ class WorkspaceRead(BaseModel):
     # never re-derive it from `kind`, or the two copies drift and a user
     # sees a module the server thinks is off.
     enabled_modules: list[str] = []
+    # Securo's own destinations (tasks/calendar/meetings/cameras) for the
+    # requesting member — see `services/member_access_service.py`.
+    # Separate from `enabled_modules` because it's a different, fork-only
+    # id space; siprov is intentionally not part of either list.
+    enabled_features: list[str] = []
 
     class Config:
         from_attributes = True
@@ -75,9 +80,16 @@ class MemberRead(BaseModel):
     display_name: Optional[str] = None
     role: str
     joined_at: datetime
+    # Module/feature ids explicitly hidden from this member by the owner.
+    # Always empty for owners — see workspace_service.update_member_role.
+    hidden_modules: list[str] = []
 
     class Config:
         from_attributes = True
+
+
+class MemberModulesUpdate(BaseModel):
+    hidden_modules: list[str] = []
 
 
 class MemberInvite(BaseModel):

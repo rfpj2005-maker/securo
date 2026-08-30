@@ -35,11 +35,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { AlertTriangle, Archive, Plus, Save, Trash2, Users } from 'lucide-react'
+import { AlertTriangle, Archive, Plus, Save, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { WORKSPACE_KIND_LABEL_KEY } from '@/lib/workspace-kinds'
 import { countryFlag } from '@/lib/country-flag'
 import { countryName } from '@/lib/country-name'
+import { MODULE_IDS } from '@/lib/modules'
+import { FEATURE_IDS } from '@/lib/features'
 import type { WorkspaceKind, WorkspaceMember, WorkspaceRole } from '@/types'
+
+// The nav i18n key each restrictable id borrows its label from — reusing
+// the labels the sidebar already ships instead of inventing new copy.
+// Only `split_groups` differs in spelling from its nav key (`splitGroups`).
+const MODULE_NAV_KEY: Record<string, string> = Object.fromEntries(
+  [...MODULE_IDS, ...FEATURE_IDS].map((id) => [id, id === 'split_groups' ? 'splitGroups' : id]),
+)
+
+// Grouped for the "manage modules" dialog: upstream finance modules first,
+// then Securo's own destinations — two unrelated id spaces (see
+// lib/modules.ts vs lib/features.ts) shown as one list to a sócio's owner.
+const MODULE_DIALOG_GROUPS: { labelKey: string; ids: readonly string[] }[] = [
+  { labelKey: 'workspace.modulesGroupFinance', ids: MODULE_IDS },
+  { labelKey: 'workspace.modulesGroupOther', ids: FEATURE_IDS },
+]
 
 function labelForRole(role: WorkspaceRole, t: (key: string) => string): string {
   return {
@@ -94,6 +111,8 @@ export default function WorkspaceSettingsPage() {
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('editor')
   const [removeTarget, setRemoveTarget] = useState<WorkspaceMember | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [modulesTarget, setModulesTarget] = useState<WorkspaceMember | null>(null)
+  const [modulesChecked, setModulesChecked] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!current) return
@@ -253,6 +272,33 @@ export default function WorkspaceSettingsPage() {
       const detail =
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         (e instanceof Error ? e.message : 'Failed')
+      toast.error(detail)
+    },
+  })
+
+  const openModulesDialog = (member: WorkspaceMember) => {
+    const hidden = new Set(member.hidden_modules)
+    const allIds = [...MODULE_IDS, ...FEATURE_IDS]
+    setModulesChecked(new Set(allIds.filter((id) => !hidden.has(id))))
+    setModulesTarget(member)
+  }
+
+  const modulesMutation = useMutation({
+    mutationFn: () => {
+      if (!current || !modulesTarget) throw new Error('No workspace or target')
+      const allIds = [...MODULE_IDS, ...FEATURE_IDS]
+      const hidden = allIds.filter((id) => !modulesChecked.has(id))
+      return workspacesApi.setMemberModules(current.id, modulesTarget.user_id, hidden)
+    },
+    onSuccess: () => {
+      toast.success(t('workspace.modulesSaved'))
+      setModulesTarget(null)
+      queryClient.invalidateQueries({ queryKey: ['workspace-members', current?.id] })
+    },
+    onError: (e: unknown) => {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (e instanceof Error ? e.message : t('workspace.modulesSaveError'))
       toast.error(detail)
     },
   })
@@ -551,6 +597,17 @@ export default function WorkspaceSettingsPage() {
                       {labelForRole(m.role, t)}
                     </Badge>
                   )}
+                  {canManage && !isMe && m.role !== 'owner' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openModulesDialog(m)}
+                      title={t('workspace.manageModules')}
+                      className="rounded-lg"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                    </Button>
+                  )}
                   {canManage && !isMe && (
                     <Button
                       variant="ghost"
@@ -707,6 +764,76 @@ export default function WorkspaceSettingsPage() {
               className="rounded-lg"
             >
               {removeMutation.isPending ? t('common.loading') : t('workspace.remove')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage per-member modules dialog */}
+      <Dialog
+        open={!!modulesTarget}
+        onOpenChange={(open) => !open && setModulesTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('workspace.manageModulesTitle', {
+                name: modulesTarget?.display_name || modulesTarget?.email,
+              })}
+            </DialogTitle>
+            <DialogDescription>{t('workspace.manageModulesDescription')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1 max-h-[60vh] overflow-y-auto">
+            {MODULE_DIALOG_GROUPS.map((group) => (
+              <div key={group.labelKey} className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  {t(group.labelKey)}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.ids.map((id) => {
+                    const checked = modulesChecked.has(id)
+                    return (
+                      <label
+                        key={id}
+                        htmlFor={`module-${id}`}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          id={`module-${id}`}
+                          checked={checked}
+                          onChange={(e) => {
+                            setModulesChecked((prev) => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(id)
+                              else next.delete(id)
+                              return next
+                            })
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary"
+                        />
+                        {t(`nav.${MODULE_NAV_KEY[id]}`)}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setModulesTarget(null)}
+              className="rounded-lg"
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={() => modulesMutation.mutate()}
+              disabled={modulesMutation.isPending}
+              className="rounded-lg"
+            >
+              {modulesMutation.isPending ? t('common.loading') : t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

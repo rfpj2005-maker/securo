@@ -117,3 +117,33 @@ class WorkspaceMember(Base):
 
     workspace: Mapped["Workspace"] = relationship(back_populates="members")
     user: Mapped["User"] = relationship(foreign_keys=[user_id])
+    hidden_modules: Mapped[list["WorkspaceMemberHiddenModule"]] = relationship(
+        cascade="all, delete-orphan"
+    )
+
+
+class WorkspaceMemberHiddenModule(Base):
+    """One module/feature id explicitly hidden from one member, on top of
+    whatever the workspace itself grants them. Presence = hidden; absence
+    = the member sees whatever the workspace shows. There is no
+    "explicitly shown" row — something the workspace doesn't grant can't
+    be turned on per member, only per-workspace.
+
+    Covers two otherwise-unrelated id spaces sharing one override table:
+    the upstream `ModuleId` catalog (`services/module_service.py`) and
+    Securo's own always-on destinations — tasks/calendar/meetings/cameras
+    (`services/member_access_service.py`). From a sócio's point of view
+    it's a single "what can this person see" list, so one table.
+
+    Owners and managers are never restricted — enforced in the API layer
+    (`api/workspaces.py`), not here.
+    """
+
+    __tablename__ = "workspace_member_hidden_modules"
+
+    workspace_member_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("workspace_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    module_id: Mapped[str] = mapped_column(String(30), primary_key=True)

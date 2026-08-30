@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
 import { workspaces as workspacesApi, WORKSPACE_STORAGE_KEY } from '@/lib/api'
 import type { ModuleId } from '@/lib/modules'
+import type { FeatureId } from '@/lib/features'
 import type { Workspace, WorkspaceRole } from '@/types'
 
 interface WorkspaceContextType {
@@ -26,6 +27,11 @@ interface WorkspaceContextType {
    * workspace list is still loading, so nothing renders on a guess.
    */
   hasModule: (id: ModuleId) => boolean
+  /** Securo's own destinations (tasks/calendar/meetings/cameras) this
+   *  member can see, as resolved by the server. */
+  enabledFeatures: FeatureId[]
+  /** The single question the UI asks about Securo's own destinations. */
+  hasFeature: (id: FeatureId) => boolean
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null)
@@ -116,6 +122,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [enabledModules],
   )
 
+  const enabledFeatures = useMemo(
+    () => (current?.enabled_features ?? []) as FeatureId[],
+    [current],
+  )
+  const hasFeature = useCallback(
+    (id: FeatureId) => enabledFeatures.includes(id),
+    [enabledFeatures],
+  )
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -129,6 +144,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         canWrite,
         enabledModules,
         hasModule,
+        enabledFeatures,
+        hasFeature,
       }}
     >
       {children}

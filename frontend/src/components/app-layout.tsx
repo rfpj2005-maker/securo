@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
 import { useMeetingRecording } from '@/contexts/meeting-recording-context'
 import { useWorkspace } from '@/contexts/workspace-context'
+import { SIPROV_AGENT_ID, type FeatureId } from '@/lib/features'
 import { CollectionSelector } from '@/components/collection-selector'
 import { auth as authApi, backup as backupApi, admin as adminApi } from '@/lib/api'
 import { resolveSupportedLang } from '@/lib/i18n'
@@ -55,11 +56,14 @@ import {
   CalendarDays,
   Mic,
   Camera,
+  Watch,
+  Phone,
 } from 'lucide-react'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { ChangePasswordDialog } from '@/components/change-password-dialog'
 import { TwoFactorSetup } from '@/components/two-factor-setup'
 import { PasskeyManagementDialog } from '@/components/passkey-management-dialog'
+import { WatchPairingDialog } from '@/components/watch-pairing-dialog'
 import { CommandPalette } from '@/components/command-palette'
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey'
 import { GlobalChatPanel } from '@/components/global-chat-panel'
@@ -69,13 +73,14 @@ import { setThemeBasedOnSystem } from '@/lib/theme-utils'
 import { formatCurrency } from '@/lib/format'
 
 // Securo's own always-on destinations — not part of the workspace module
-// system (which only gates the upstream finance modules), so they're
-// appended unconditionally after the module-gated list below.
-const CUSTOM_NAV_ITEMS: { key: string; path: string; icon: React.ElementType }[] = [
-  { key: 'tasks', path: '/tasks', icon: ListChecks },
-  { key: 'calendar', path: '/calendar', icon: CalendarDays },
-  { key: 'meetings', path: '/meetings', icon: Mic },
-  { key: 'cameras', path: '/cameras', icon: Camera },
+// system (which only gates the upstream finance modules). Appended after
+// the module-gated list below, filtered per member by `hasFeature` (see
+// lib/features.ts / member_access_service.py) rather than `hasModule`.
+const CUSTOM_NAV_ITEMS: { key: string; path: string; icon: React.ElementType; feature: FeatureId }[] = [
+  { key: 'tasks', path: '/tasks', icon: ListChecks, feature: 'tasks' },
+  { key: 'calendar', path: '/calendar', icon: CalendarDays, feature: 'calendar' },
+  { key: 'meetings', path: '/meetings', icon: Mic, feature: 'meetings' },
+  { key: 'cameras', path: '/cameras', icon: Camera, feature: 'cameras' },
 ]
 
 /** Placeholder rows shown while the workspace's module list is in flight. */
@@ -115,13 +120,14 @@ export function AppLayout() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [twoFactorOpen, setTwoFactorOpen] = useState(false)
   const [passkeysOpen, setPasskeysOpen] = useState(false)
+  const [watchPairOpen, setWatchPairOpen] = useState(false)
   const [backingUp, setBackingUp] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false)
   useCommandPaletteHotkey(setPaletteOpen)
-  const { agentsEnabled } = useFeatureFlags()
-  const { hasModule, isLoading: workspaceLoading, canWrite } = useWorkspace()
+  const { agentsEnabled, pabxEnabled } = useFeatureFlags()
+  const { hasModule, hasFeature, isLoading: workspaceLoading, canWrite } = useWorkspace()
   const meetingRecording = useMeetingRecording()
   // The chat is offered only to members who can write. Sending a message
   // reaches a tool set that persists — `propose_create_transaction` and its
@@ -278,6 +284,7 @@ export function AppLayout() {
             onChangePassword={() => setChangePasswordOpen(true)}
             onTwoFactor={() => setTwoFactorOpen(true)}
             onPasskeys={() => setPasskeysOpen(true)}
+            onWatchPair={() => setWatchPairOpen(true)}
             agentsEnabled={agentsEnabled}
             backingUp={backingUp}
             onBackup={async () => {
@@ -520,13 +527,14 @@ export function AppLayout() {
               )
             })}
             {!workspaceLoading && [
-              ...CUSTOM_NAV_ITEMS,
+              ...CUSTOM_NAV_ITEMS.filter((item) => hasFeature(item.feature)),
               // The Siprov agent chat is a daily destination when agents
               // are on, so it gets its own direct link alongside Tasks/
               // Calendar/Meetings rather than living only in the chat panel.
-              ...(agentsEnabled
-                ? [{ key: 'siprov', path: '/agents/067f6fdb-f660-4579-913b-1f80c6a22e30', icon: Car }]
+              ...(agentsEnabled && hasFeature('siprov')
+                ? [{ key: 'siprov', path: `/agents/${SIPROV_AGENT_ID}`, icon: Car }]
                 : []),
+              ...(pabxEnabled ? [{ key: 'pabx', path: '/pabx', icon: Phone }] : []),
             ].map((item) => {
               const isActive = location.pathname.startsWith(item.path)
               const Icon = item.icon
@@ -640,6 +648,7 @@ export function AppLayout() {
               onChangePassword={() => setChangePasswordOpen(true)}
               onTwoFactor={() => setTwoFactorOpen(true)}
               onPasskeys={() => setPasskeysOpen(true)}
+              onWatchPair={() => setWatchPairOpen(true)}
               onBackup={async () => {
                 setBackingUp(true)
                 try {
@@ -693,6 +702,10 @@ export function AppLayout() {
         open={passkeysOpen}
         onClose={() => setPasskeysOpen(false)}
       />
+      <WatchPairingDialog
+        open={watchPairOpen}
+        onClose={() => setWatchPairOpen(false)}
+      />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       {/* Slide-over global chat — opened from the sidebar pill or via
           ⌘J. The previous floating bottom-right button was removed
@@ -732,6 +745,7 @@ function UserMenu({
   onChangePassword,
   onTwoFactor,
   onPasskeys,
+  onWatchPair,
   onBackup,
   backingUp,
   dark,
@@ -743,6 +757,7 @@ function UserMenu({
   onChangePassword: () => void
   onTwoFactor: () => void
   onPasskeys: () => void
+  onWatchPair: () => void
   onBackup: () => void
   backingUp: boolean
   dark?: boolean
@@ -802,6 +817,13 @@ function UserMenu({
         >
           <Fingerprint size={14} />
           {t('auth.passkeysTitle')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={onWatchPair}
+          className="flex items-center gap-2"
+        >
+          <Watch size={14} />
+          {t('auth.watchPairTitle')}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={backingUp}

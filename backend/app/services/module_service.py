@@ -258,3 +258,17 @@ _default_resolver = ModuleResolver()
 def resolve_modules(workspace: Workspace) -> list[str]:
     """Module list for a workspace, using the default chain."""
     return _default_resolver.resolve(workspace)
+
+
+def resolve_modules_for_member(workspace: Workspace, hidden: Sequence[str] = ()) -> list[str]:
+    """Module list for one member of a workspace: the workspace's resolved
+    set, minus that member's explicit hides (`WorkspaceMemberHiddenModule`).
+
+    A hide can only remove a module the workspace already grants — never
+    add one the kind/catalog didn't. `hidden` may contain ids outside
+    `ModuleId` (e.g. Securo's own feature ids); those simply never match
+    anything in `resolved` and are ignored here.
+    """
+    resolved = _default_resolver._resolve_ids(workspace)
+    hidden_set = set(hidden)
+    return sorted(m.value for m in resolved if m.value not in hidden_set)

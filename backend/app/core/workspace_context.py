@@ -109,3 +109,23 @@ async def current_writable_workspace(
 ) -> WorkspaceContext:
     ctx.require_write()
     return ctx
+
+
+# Gate for company infrastructure that isn't workspace data (cameras,
+# PABX) but also isn't meant for every registered user of the install —
+# only people who actually belong to a business workspace. Deliberately
+# NOT workspace-scoped like current_workspace/current_writable_workspace
+# above: cameras/PABX aren't per-workspace resources, there's no
+# X-Workspace-Id concept for them, just "does this person work at a
+# business here at all". See workspace_service.is_business_member.
+async def current_business_user(
+    user: User = Depends(current_active_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> User:
+    from app.services.workspace_service import is_business_member
+
+    if not await is_business_member(session, user.id):
+        raise HTTPException(
+            status_code=403, detail="Not a member of a business workspace"
+        )
+    return user

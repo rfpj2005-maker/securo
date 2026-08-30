@@ -19,13 +19,18 @@ from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
 from app.schemas.workspace import (
     MemberInvite,
+    MemberModulesUpdate,
     MemberRead,
     MemberRoleUpdate,
     WorkspaceCreate,
     WorkspaceRead,
     WorkspaceUpdate,
 )
-from app.services import module_service, workspace_service
+from app.services import member_access_service, module_service, workspace_service
+
+_RESTRICTABLE_IDS = frozenset(m.value for m in module_service.ModuleId) | frozenset(
+    member_access_service.FEATURE_IDS
+)
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
@@ -35,17 +40,32 @@ def _user_display_name(user: User) -> str | None:
     return prefs.get("display_name") or None
 
 
-def _workspace_read(workspace: Workspace, role: str | None) -> WorkspaceRead:
+def _workspace_read(
+    workspace: Workspace, role: str | None, hidden: set[str] | frozenset[str] = frozenset()
+) -> WorkspaceRead:
     """Build the read model for a workspace.
 
     Every response that returns a workspace goes through here, so a new
-    read path cannot ship without `enabled_modules` — forgetting it
-    would leave the frontend hiding modules the server enabled.
+    read path cannot ship without `enabled_modules`/`enabled_features` —
+    forgetting either would leave the frontend showing something the
+    server actually hid for this member. `hidden` is that member's
+    explicit override set; owners/managers should always pass the empty
+    default since they're never restricted.
     """
     item = WorkspaceRead.model_validate(workspace)
     item.role = role
-    item.enabled_modules = module_service.resolve_modules(workspace)
+    item.enabled_modules = module_service.resolve_modules_for_member(workspace, hidden)
+    item.enabled_features = member_access_service.resolve_features_for_member(workspace.kind, hidden)
     return item
+
+
+async def _hidden_for(session: AsyncSession, member: WorkspaceMember) -> set[str]:
+    """A member's hidden set, or empty for the virtual manager membership
+    (never persisted, so `member.id` is None and there's nothing to look
+    up — managers are effective owners anyway)."""
+    if member.id is None:
+        return set()
+    return await workspace_service.get_hidden_module_ids(session, member.id)
 
 
 @router.get("", response_model=list[WorkspaceRead])
@@ -66,7 +86,7 @@ async def list_my_workspaces(
     since their explicit role is the more specific signal.
     """
     member_rows = await session.execute(
-        select(Workspace, WorkspaceMember.role)
+        select(Workspace, WorkspaceMember)
         .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
         .where(
             WorkspaceMember.user_id == user.id,
@@ -74,10 +94,14 @@ async def list_my_workspaces(
         )
         .order_by(Workspace.created_at.asc())
     )
+    rows = member_rows.all()
+    hidden_by_member = await workspace_service.get_hidden_module_ids_bulk(
+        session, [wm.id for _, wm in rows]
+    )
     out: list[WorkspaceRead] = []
     seen_ids: set[uuid.UUID] = set()
-    for ws, role in member_rows.all():
-        out.append(_workspace_read(ws, role))
+    for ws, wm in rows:
+        out.append(_workspace_read(ws, wm.role, hidden_by_member.get(wm.id, set())))
         seen_ids.add(ws.id)
 
     managed_rows = await session.execute(
@@ -124,9 +148,13 @@ async def create_workspace_endpoint(
 
 
 @router.get("/current", response_model=WorkspaceRead)
-async def get_current_workspace(ctx: WorkspaceContext = Depends(current_workspace)):
+async def get_current_workspace(
+    ctx: WorkspaceContext = Depends(current_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
     """Return the workspace resolved from X-Workspace-Id (or the default)."""
-    return _workspace_read(ctx.workspace, ctx.role)
+    hidden = await _hidden_for(session, ctx.member)
+    return _workspace_read(ctx.workspace, ctx.role, hidden)
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceRead)
@@ -157,7 +185,8 @@ async def update_workspace(
         session.add(user)
     await session.commit()
     await session.refresh(workspace)
-    return _workspace_read(workspace, member.role)
+    hidden = await _hidden_for(session, member)
+    return _workspace_read(workspace, member.role, hidden)
 
 
 @router.get("/{workspace_id}/members", response_model=list[MemberRead])
@@ -169,6 +198,9 @@ async def list_workspace_members(
     # Any member can list members of their own workspace.
     await workspace_service.require_membership(session, workspace_id, user.id)
     rows = await workspace_service.list_members(session, workspace_id)
+    hidden_by_member = await workspace_service.get_hidden_module_ids_bulk(
+        session, [m.id for m, _ in rows]
+    )
     return [
         MemberRead(
             id=m.id,
@@ -177,6 +209,7 @@ async def list_workspace_members(
             display_name=_user_display_name(u),
             role=m.role,
             joined_at=m.joined_at,
+            hidden_modules=sorted(hidden_by_member.get(m.id, set())),
         )
         for m, u in rows
     ]
@@ -280,6 +313,7 @@ async def change_member_role(
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Could not find user")
 
+    hidden = await workspace_service.get_hidden_module_ids(session, member.id)
     return MemberRead(
         id=member.id,
         user_id=target.id,
@@ -287,7 +321,63 @@ async def change_member_role(
         display_name=_user_display_name(target),
         role=member.role,
         joined_at=member.joined_at,
+        hidden_modules=sorted(hidden),
     )
+
+
+@router.get(
+    "/{workspace_id}/members/{member_user_id}/modules",
+    response_model=MemberModulesUpdate,
+)
+async def get_member_modules(
+    workspace_id: uuid.UUID,
+    member_user_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+):
+    await workspace_service.require_membership(
+        session, workspace_id, user.id, min_role="owner"
+    )
+    target = await workspace_service.get_membership(session, workspace_id, member_user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    hidden = await workspace_service.get_hidden_module_ids(session, target.id)
+    return MemberModulesUpdate(hidden_modules=sorted(hidden))
+
+
+@router.put(
+    "/{workspace_id}/members/{member_user_id}/modules",
+    response_model=MemberModulesUpdate,
+)
+async def set_member_modules(
+    workspace_id: uuid.UUID,
+    member_user_id: uuid.UUID,
+    body: MemberModulesUpdate,
+    session: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_active_user),
+):
+    """Choose which modules/features a specific sócio can see.
+
+    Owner-only, and an owner can never be the target — restricting the
+    one role that manages membership + workspace config risks a
+    self-lockout with no one left to undo it.
+    """
+    await workspace_service.require_membership(
+        session, workspace_id, user.id, min_role="owner"
+    )
+    target = await workspace_service.get_membership(session, workspace_id, member_user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if target.role == "owner":
+        raise HTTPException(status_code=400, detail="Cannot restrict modules for an owner")
+    invalid = set(body.hidden_modules) - _RESTRICTABLE_IDS
+    if invalid:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown module id(s): {', '.join(sorted(invalid))}"
+        )
+    await workspace_service.set_hidden_module_ids(session, target.id, set(body.hidden_modules))
+    await session.commit()
+    return MemberModulesUpdate(hidden_modules=sorted(body.hidden_modules))
 
 
 @router.get("/{workspace_id}/stats")

@@ -6,10 +6,10 @@ Personal workspace from registration. Additional workspaces (Freelancer,
 Small Business, etc.) can be created later via templates.
 """
 import uuid
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -17,6 +17,7 @@ from app.models.workspace import (
     MANAGER_VIRTUAL_ROLE,
     Workspace,
     WorkspaceMember,
+    WorkspaceMemberHiddenModule,
     WORKSPACE_ROLES,
 )
 
@@ -146,6 +147,28 @@ async def get_default_workspace(session: AsyncSession, user_id: uuid.UUID) -> Op
         return workspaces[0]
     managed = await get_managed_workspaces(session, user_id)
     return managed[0] if managed else None
+
+
+async def is_business_member(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """True if the user belongs to (or externally manages) at least one
+    business-kind workspace. Gates company infrastructure that isn't
+    workspace *data* — cameras, PABX — but also isn't meant for every
+    registered user of the install, only people who actually work at the
+    business. A user with only personal workspaces gets False."""
+    member_row = await session.execute(
+        select(Workspace.id)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == user_id, Workspace.kind == "business")
+        .limit(1)
+    )
+    if member_row.scalar_one_or_none() is not None:
+        return True
+    managed_row = await session.execute(
+        select(Workspace.id)
+        .where(Workspace.managed_by_user_id == user_id, Workspace.kind == "business")
+        .limit(1)
+    )
+    return managed_row.scalar_one_or_none() is not None
 
 
 async def get_membership(
@@ -343,8 +366,65 @@ async def update_member_role(
         if len(owner_rows) <= 1:
             raise HTTPException(status_code=400, detail="Cannot demote the sole owner")
     member.role = new_role
+    # Owners are never restricted — see WorkspaceMemberHiddenModule. A
+    # member promoted to owner keeps no leftover hides; demoting away
+    # from owner starts from a clean (fully-visible) slate rather than
+    # resurrecting whatever was hidden before they were ever promoted.
+    if new_role == "owner":
+        await session.execute(
+            delete(WorkspaceMemberHiddenModule).where(
+                WorkspaceMemberHiddenModule.workspace_member_id == member.id
+            )
+        )
     await session.flush()
     return member
+
+
+async def get_hidden_module_ids(session: AsyncSession, member_id: uuid.UUID) -> set[str]:
+    """A member's explicit hides — modules/features the workspace grants
+    but this specific member shouldn't see."""
+    result = await session.execute(
+        select(WorkspaceMemberHiddenModule.module_id).where(
+            WorkspaceMemberHiddenModule.workspace_member_id == member_id
+        )
+    )
+    return set(result.scalars().all())
+
+
+async def get_hidden_module_ids_bulk(
+    session: AsyncSession, member_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, set[str]]:
+    """Batch form of `get_hidden_module_ids`, for listing endpoints that
+    would otherwise issue one query per member."""
+    out: dict[uuid.UUID, set[str]] = {mid: set() for mid in member_ids}
+    if not member_ids:
+        return out
+    result = await session.execute(
+        select(
+            WorkspaceMemberHiddenModule.workspace_member_id,
+            WorkspaceMemberHiddenModule.module_id,
+        ).where(WorkspaceMemberHiddenModule.workspace_member_id.in_(member_ids))
+    )
+    for member_id, module_id in result.all():
+        out[member_id].add(module_id)
+    return out
+
+
+async def set_hidden_module_ids(
+    session: AsyncSession, member_id: uuid.UUID, module_ids: set[str]
+) -> None:
+    """Replace a member's hidden set wholesale — simpler than diffing and
+    cheap enough (at most a couple dozen rows)."""
+    await session.execute(
+        delete(WorkspaceMemberHiddenModule).where(
+            WorkspaceMemberHiddenModule.workspace_member_id == member_id
+        )
+    )
+    for module_id in module_ids:
+        session.add(
+            WorkspaceMemberHiddenModule(workspace_member_id=member_id, module_id=module_id)
+        )
+    await session.flush()
 
 
 async def get_workspace_stats(

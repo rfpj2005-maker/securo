@@ -127,7 +127,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    # Painel Amparar (rastreador-conferencia, port 8444) calls
+    # /api/auth/login and /api/workspaces directly from its own origin as
+    # part of the shared-login SSO (2026-09-16) — it trusts the same JWT
+    # this backend issues instead of keeping its own password login. Not
+    # the Funnel-exposed port 8443, which is an unrelated public service.
+    allow_origins=[settings.frontend_url, "https://desktop-s200k6m.tail50b52d.ts.net:8444"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

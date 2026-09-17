@@ -171,6 +171,19 @@ async def _access_token(session: AsyncSession, conn: GoogleCalendarConnection) -
                 "grant_type": "refresh_token",
             },
         )
+        if resp.status_code == 400:
+            # Google's own signal for "this refresh token no longer works"
+            # (revoked, or — very commonly on an OAuth app still in
+            # "Testing" publish status — auto-expired after 7 days
+            # regardless of use). Surfaced as the same recognized
+            # exception every route already knows to turn into a clear
+            # "reconnect" response, instead of an opaque 500.
+            body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            if body.get("error") == "invalid_grant":
+                raise GoogleCalendarNotConnected(
+                    "Google rejected the stored refresh token (invalid_grant — expired or revoked). "
+                    "Reconnect Google Calendar."
+                )
         resp.raise_for_status()
         tokens = resp.json()
 

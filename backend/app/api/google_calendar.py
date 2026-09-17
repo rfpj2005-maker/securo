@@ -127,7 +127,10 @@ async def create_event(
 ):
     conn = await _require_connection(session, user)
     tz_name = (user.preferences or {}).get("timezone") or "UTC"
-    return await gcal.create_event(session, conn, data, tz_name)
+    try:
+        return await gcal.create_event(session, conn, data, tz_name)
+    except gcal.GoogleCalendarNotConnected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.patch("/events/{event_id}", response_model=CalendarEventRead)
@@ -140,7 +143,10 @@ async def update_event(
 ):
     conn = await _require_connection(session, user)
     tz_name = (user.preferences or {}).get("timezone") or "UTC"
-    return await gcal.update_event(session, conn, calendar_id, event_id, data, tz_name)
+    try:
+        return await gcal.update_event(session, conn, calendar_id, event_id, data, tz_name)
+    except gcal.GoogleCalendarNotConnected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -151,4 +157,7 @@ async def delete_event(
     user: User = Depends(current_active_user),
 ):
     conn = await _require_connection(session, user)
-    await gcal.delete_event(session, conn, calendar_id, event_id)
+    try:
+        await gcal.delete_event(session, conn, calendar_id, event_id)
+    except gcal.GoogleCalendarNotConnected as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

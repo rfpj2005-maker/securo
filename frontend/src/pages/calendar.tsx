@@ -165,6 +165,24 @@ export default function CalendarPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['google-calendar'] }),
   })
 
+  // The backend recognizes Google rejecting the stored refresh token
+  // (expired/revoked) and returns a 400 with a distinct detail instead of
+  // an opaque 500 — worth telling the user to reconnect specifically,
+  // rather than a generic "something went wrong".
+  const onCalendarMutationError = (err: unknown) => {
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? ''
+    if (detail.includes('reconnect') || detail.includes('invalid_grant')) {
+      toast.error(t('calendar.reconnectNeeded'), {
+        action: {
+          label: t('calendar.reconnect'),
+          onClick: () => connectMutation.mutate(),
+        },
+      })
+      return
+    }
+    toast.error(t('common.error'))
+  }
+
   const createMutation = useMutation({
     mutationFn: (data: { summary: string; description?: string; location?: string; start: string; end: string; all_day: boolean }) =>
       gcalApi.createEvent(data),
@@ -173,7 +191,7 @@ export default function CalendarPage() {
       setDialogOpen(false)
       toast.success(t('calendar.eventCreated'))
     },
-    onError: () => toast.error(t('common.error')),
+    onError: onCalendarMutationError,
   })
 
   const updateMutation = useMutation({
@@ -184,7 +202,7 @@ export default function CalendarPage() {
       setDialogOpen(false)
       toast.success(t('calendar.eventUpdated'))
     },
-    onError: () => toast.error(t('common.error')),
+    onError: onCalendarMutationError,
   })
 
   const deleteMutation = useMutation({
@@ -194,7 +212,7 @@ export default function CalendarPage() {
       setDialogOpen(false)
       toast.success(t('calendar.eventDeleted'))
     },
-    onError: () => toast.error(t('common.error')),
+    onError: onCalendarMutationError,
   })
 
   // Flat list of visible days — a CSS grid with the right column count wraps

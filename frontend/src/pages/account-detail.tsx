@@ -18,7 +18,8 @@ import { ArrowLeft, ArrowLeftRight, CalendarClock, ChevronLeft, ChevronRight, Cl
 import { MobileTransactionRow } from '@/components/mobile-transaction-row'
 import { CategoryIcon } from '@/components/category-icon'
 import { ProjectedTransactionBadge } from '@/components/projected-transaction-badge'
-import { TransactionDialog, extractApiError, type TransactionSavePayload } from '@/components/transaction-dialog'
+import { TransactionDialog, extractApiError } from '@/components/transaction-dialog'
+import { useTransactionCategoryPrompt, type TransactionUpdatePayload } from '@/hooks/use-transaction-category-prompt'
 import { TransferDialog } from '@/components/transfer-dialog'
 import { DatePickerInput } from '@/components/ui/date-picker-input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -543,7 +544,7 @@ export default function AccountDetailPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id: txId, ...data }: TransactionSavePayload & { id: string }) =>
+    mutationFn: ({ id: txId, ...data }: TransactionUpdatePayload & { id: string }) =>
       transactions.update(txId, data),
     onSuccess: () => {
       invalidateFinancialQueries(queryClient)
@@ -555,6 +556,8 @@ export default function AccountDetailPage() {
       toast.error(extractApiError(error))
     },
   })
+  const { handleSave: handleCategoryPromptSave, dialogs: categoryPromptDialogs } =
+    useTransactionCategoryPrompt(editingTx, updateMutation.mutate, updateMutation.isPending)
 
   const deleteMutation = useMutation({
     mutationFn: (txId: string) => transactions.delete(txId),
@@ -1713,17 +1716,15 @@ export default function AccountDetailPage() {
         categories={categoriesList ?? []}
         categoryGroups={categoryGroupsList ?? []}
         accounts={accountsList ?? []}
-        onSave={(data) => {
-          if (editingTx) {
-            updateMutation.mutate({ id: editingTx.id, ...data })
-          }
-        }}
+        onSave={(data) => handleCategoryPromptSave(data)}
         onDelete={editingTx ? () => deleteMutation.mutate(editingTx.id) : undefined}
         onUnlinkTransfer={(pairId) => unlinkTransferMutation.mutate(pairId)}
         loading={updateMutation.isPending || deleteMutation.isPending || unlinkTransferMutation.isPending}
         error={updateMutation.error ? extractApiError(updateMutation.error) : null}
         isSynced={editingTx?.source === 'sync'}
       />
+
+      {categoryPromptDialogs}
 
       <TransferDialog
         open={transferDialogOpen}

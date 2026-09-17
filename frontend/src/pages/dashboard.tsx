@@ -45,7 +45,8 @@ import { PageHeader } from '@/components/page-header'
 import { CategoryIcon } from '@/components/category-icon'
 import { AccountIcon, getAccountTypeConfig } from '@/components/account-icon'
 import { TransactionDrillDown, type DrillDownFilter } from '@/components/transaction-drill-down'
-import { TransactionDialog, extractApiError, type TransactionSavePayload } from '@/components/transaction-dialog'
+import { TransactionDialog, extractApiError } from '@/components/transaction-dialog'
+import { useTransactionCategoryPrompt, type TransactionUpdatePayload } from '@/hooks/use-transaction-category-prompt'
 import { RuleDialog, type RuleDialogInitialData } from '@/components/rule-dialog'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -478,7 +479,7 @@ export default function DashboardPage() {
   }, [summary, accountsList, budgetComparison, goalsSummary, userCurrency, locale, mask, t])
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }: TransactionSavePayload & { id: string }) =>
+    mutationFn: ({ id, ...data }: TransactionUpdatePayload & { id: string }) =>
       transactions.update(id, data),
     onSuccess: () => {
       invalidateFinancialQueries(queryClient)
@@ -486,6 +487,8 @@ export default function DashboardPage() {
       setEditingTx(null)
     },
   })
+  const { handleSave: handleCategoryPromptSave, dialogs: categoryPromptDialogs } =
+    useTransactionCategoryPrompt(editingTx, updateMutation.mutate, updateMutation.isPending)
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => transactions.delete(id),
@@ -1577,9 +1580,7 @@ export default function DashboardPage() {
         categories={categoriesList ?? []}
         categoryGroups={categoryGroupsList ?? []}
         accounts={(accountsList ?? []).map((a: { id: string; name: string; display_name?: string | null }) => ({ id: a.id, name: getAccountName(a) }))}
-        onSave={(data) => {
-          if (editingTx) updateMutation.mutate({ id: editingTx.id, ...data })
-        }}
+        onSave={(data) => handleCategoryPromptSave(data)}
         onDelete={() => {
           if (editingTx) deleteMutation.mutate(editingTx.id)
         }}
@@ -1593,6 +1594,8 @@ export default function DashboardPage() {
         error={updateMutation.error ? extractApiError(updateMutation.error) : deleteMutation.error ? extractApiError(deleteMutation.error) : null}
         isSynced={editingTx?.source === 'sync'}
       />
+
+      {categoryPromptDialogs}
 
       <RuleDialog
         key={createRuleOpen ? 'rule-open' : 'rule-closed'}

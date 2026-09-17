@@ -61,23 +61,7 @@ import { useWorkspace } from '@/contexts/workspace-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
 import { formatCurrency } from '@/lib/format'
 import { shouldShowPendingBadge } from '@/lib/transaction-status'
-
-type TransactionUpdatePayload = TransactionEditPayload & {
-  apply_to_transfer_pair?: boolean
-  apply_to?: TransactionApplyScope
-  apply_to_all_with_description?: boolean
-}
-
-type PendingTransferCategoryUpdate = {
-  id: string
-  data: TransactionUpdatePayload
-}
-
-type PendingDescriptionCategoryUpdate = {
-  id: string
-  data: TransactionUpdatePayload
-  description: string
-}
+import { useTransactionCategoryPrompt, type TransactionUpdatePayload } from '@/hooks/use-transaction-category-prompt'
 
 function parseHashtags(notes: string | null): string[] {
   if (!notes) return []
@@ -142,10 +126,6 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') ?? '')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
-  const [pendingTransferCategoryUpdate, setPendingTransferCategoryUpdate] =
-    useState<PendingTransferCategoryUpdate | null>(null)
-  const [pendingDescriptionCategoryUpdate, setPendingDescriptionCategoryUpdate] =
-    useState<PendingDescriptionCategoryUpdate | null>(null)
   // Manual installment-series scoped delete. Scoped edits are handled by the
   // shared TransactionDialog so account detail and dashboard behave the same.
   const [pendingSeriesDeleteId, setPendingSeriesDeleteId] = useState<string | null>(null)
@@ -842,31 +822,8 @@ export default function TransactionsPage() {
 
   const totalPages = data ? Math.ceil(data.total / limit) : 0
 
-  const isTransferCategoryPromptOpen = !!pendingTransferCategoryUpdate
-
-  const submitPendingTransferCategoryUpdate = (applyToTransferPair: boolean) => {
-    if (!pendingTransferCategoryUpdate) return
-    const { id, data } = pendingTransferCategoryUpdate
-    updateMutation.mutate({
-      id,
-      ...data,
-      apply_to_transfer_pair: applyToTransferPair,
-    })
-    setPendingTransferCategoryUpdate(null)
-  }
-
-  const isDescriptionCategoryPromptOpen = !!pendingDescriptionCategoryUpdate
-
-  const submitPendingDescriptionCategoryUpdate = (applyToAllWithDescription: boolean) => {
-    if (!pendingDescriptionCategoryUpdate) return
-    const { id, data } = pendingDescriptionCategoryUpdate
-    updateMutation.mutate({
-      id,
-      ...data,
-      apply_to_all_with_description: applyToAllWithDescription,
-    })
-    setPendingDescriptionCategoryUpdate(null)
-  }
+  const { handleSave: handleCategoryPromptSave, dialogs: categoryPromptDialogs } =
+    useTransactionCategoryPrompt(editingTx, updateMutation.mutate, updateMutation.isPending)
 
   const handleTransactionSave = (
     data: TransactionSavePayload,
@@ -879,27 +836,7 @@ export default function TransactionsPage() {
       createMutation.mutate({ tx: data, recurringData, installmentData, pendingFiles, action })
       return
     }
-
-    const isCategoryChange =
-      Object.prototype.hasOwnProperty.call(data, 'category_id') &&
-      data.category_id !== editingTx.category_id
-
-    const isTransferCategoryChange = isCategoryChange && !!editingTx.transfer_pair_id
-
-    if (isTransferCategoryChange) {
-      setPendingTransferCategoryUpdate({ id: editingTx.id, data })
-      return
-    }
-
-    // Non-transfer category changes: ask whether to also recategorize every
-    // other transaction sharing this one's description, same "just this one
-    // or all of them" shape as the transfer-pair prompt above.
-    if (isCategoryChange) {
-      setPendingDescriptionCategoryUpdate({ id: editingTx.id, data, description: editingTx.description })
-      return
-    }
-
-    updateMutation.mutate({ id: editingTx.id, ...data })
+    handleCategoryPromptSave(data)
   }
 
   const submitPendingSeriesDelete = (scope: TransactionApplyScope) => {
@@ -1972,8 +1909,6 @@ export default function TransactionsPage() {
           setDialogOpen(false)
           setEditingTx(null)
           setDuplicateDraft(null)
-          setPendingTransferCategoryUpdate(null)
-          setPendingDescriptionCategoryUpdate(null)
           // Drop any prior mutation error so reopening the dialog
           // doesn't surface a stale message (issue #155).
           createMutation.reset()
@@ -2012,91 +1947,7 @@ export default function TransactionsPage() {
         isSynced={editingTx?.source === 'sync'}
       />
 
-      <Dialog
-        open={isTransferCategoryPromptOpen}
-        onOpenChange={(open) => {
-          if (!open) setPendingTransferCategoryUpdate(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('transactions.confirmTransferCategoryTitle')}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {t('transactions.confirmTransferCategoryDesc')}
-          </p>
-          <DialogFooter className="flex-row flex-nowrap items-center justify-end gap-2 sm:space-x-0">
-            <Button
-              className="shrink-0"
-              variant="outline"
-              onClick={() => setPendingTransferCategoryUpdate(null)}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              className="min-w-0 flex-1 truncate"
-              variant="outline"
-              onClick={() => submitPendingTransferCategoryUpdate(false)}
-              disabled={updateMutation.isPending}
-            >
-              {t('transactions.confirmTransferCategorySingle')}
-            </Button>
-            <Button
-              className="min-w-0 flex-1 truncate"
-              onClick={() => submitPendingTransferCategoryUpdate(true)}
-              disabled={updateMutation.isPending}
-            >
-              {updateMutation.isPending
-                ? t('common.loading')
-                : t('transactions.confirmTransferCategoryBoth')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={isDescriptionCategoryPromptOpen}
-        onOpenChange={(open) => {
-          if (!open) setPendingDescriptionCategoryUpdate(null)
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('transactions.confirmDescriptionCategoryTitle')}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {t('transactions.confirmDescriptionCategoryDesc', {
-              description: pendingDescriptionCategoryUpdate?.description ?? '',
-            })}
-          </p>
-          <DialogFooter className="flex-row flex-nowrap items-center justify-end gap-2 sm:space-x-0">
-            <Button
-              className="shrink-0"
-              variant="outline"
-              onClick={() => setPendingDescriptionCategoryUpdate(null)}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              className="min-w-0 flex-1 truncate"
-              variant="outline"
-              onClick={() => submitPendingDescriptionCategoryUpdate(false)}
-              disabled={updateMutation.isPending}
-            >
-              {t('transactions.confirmDescriptionCategorySingle')}
-            </Button>
-            <Button
-              className="min-w-0 flex-1 truncate"
-              onClick={() => submitPendingDescriptionCategoryUpdate(true)}
-              disabled={updateMutation.isPending}
-            >
-              {updateMutation.isPending
-                ? t('common.loading')
-                : t('transactions.confirmDescriptionCategoryAll')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {categoryPromptDialogs}
 
       {/* Installment-series delete scope. Edit scope is handled by the shared
           TransactionDialog so every edit surface behaves consistently. */}

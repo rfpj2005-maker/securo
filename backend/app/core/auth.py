@@ -64,6 +64,53 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         await create_default_categories(session, user.id, lang, workspace_id=workspace.id)
         await create_default_rules(session, user.id, lang, workspace_id=workspace.id)
 
+    async def on_after_forgot_password(self, user: User, token: str, request: Optional[Request] = None):
+        from app.services.mailer import send_email
+
+        reset_url = f"{settings.frontend_url}/reset-password?token={token}"
+        lang = (user.preferences or {}).get("language", "en")
+        if lang.startswith("pt"):
+            subject = "Redefinir sua senha — Bússola"
+            text = (
+                "Recebemos um pedido para redefinir a senha da sua conta Bússola.\n\n"
+                f"Escolha uma nova senha aqui (link válido por 1 hora):\n{reset_url}\n\n"
+                "Se você não pediu isso, pode ignorar este e-mail — sua senha continua a mesma."
+            )
+            html = (
+                "<p>Recebemos um pedido para redefinir a senha da sua conta Bússola.</p>"
+                f'<p><a href="{reset_url}">Clique aqui para escolher uma nova senha</a> (o link vale por 1 hora).</p>'
+                "<p>Se você não pediu isso, pode ignorar este e-mail — sua senha continua a mesma.</p>"
+            )
+        else:
+            subject = "Reset your password — Bússola"
+            text = (
+                "We received a request to reset your Bússola account password.\n\n"
+                f"Choose a new password here (link valid for 1 hour):\n{reset_url}\n\n"
+                "If you didn't request this, you can ignore this email — your password stays the same."
+            )
+            html = (
+                "<p>We received a request to reset your Bússola account password.</p>"
+                f'<p><a href="{reset_url}">Click here to choose a new password</a> (the link is valid for 1 hour).</p>'
+                "<p>If you didn't request this, you can ignore this email — your password stays the same.</p>"
+            )
+        sent = await send_email(to=user.email, subject=subject, html_body=html, text_body=text)
+        if not sent:
+            # SMTP not configured (or the send failed) — still log the link
+            # server-side so it's recoverable from `docker compose logs`.
+            print(f"[password-reset] could not email {user.id} ({user.email}) — reset link: {reset_url}")
+
+    async def on_after_reset_password(self, user: User, request: Optional[Request] = None):
+        from app.services.mailer import send_email
+
+        lang = (user.preferences or {}).get("language", "en")
+        if lang.startswith("pt"):
+            subject = "Sua senha foi alterada — Bússola"
+            text = "A senha da sua conta Bússola foi alterada agora há pouco. Se não foi você, entre em contato imediatamente."
+        else:
+            subject = "Your password was changed — Bússola"
+            text = "Your Bússola account password was just changed. If this wasn't you, contact support immediately."
+        await send_email(to=user.email, subject=subject, html_body=f"<p>{text}</p>", text_body=text)
+
 
 async def get_user_manager(user_db: SQLAlchemyUserDatabase = Depends(get_user_db)):
     yield UserManager(user_db)

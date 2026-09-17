@@ -17,6 +17,8 @@ import { AppLayout } from '@/components/app-layout'
 
 const SetupPage = lazy(() => import('@/pages/setup'))
 const LoginPage = lazy(() => import('@/pages/login'))
+const ForgotPasswordPage = lazy(() => import('@/pages/forgot-password'))
+const ResetPasswordPage = lazy(() => import('@/pages/reset-password'))
 const RegisterPage = lazy(() => import('@/pages/register'))
 const DashboardPage = lazy(() => import('@/pages/dashboard'))
 const TransactionsPage = lazy(() => import('@/pages/transactions'))
@@ -38,6 +40,7 @@ const CalendarPage = lazy(() => import('@/pages/calendar'))
 const MeetingsPage = lazy(() => import('@/pages/meetings'))
 const CamerasPage = lazy(() => import('@/pages/cameras'))
 const PabxPage = lazy(() => import('@/pages/pabx'))
+const InadimplenciaPage = lazy(() => import('@/pages/inadimplencia'))
 const GroupsPage = lazy(() => import('@/pages/groups'))
 const GroupDetailPage = lazy(() => import('@/pages/group-detail'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/settings'))
@@ -77,6 +80,8 @@ function App() {
               <Routes>
                 <Route path="/setup" element={<SetupPage />} />
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/auth/oidc/callback" element={<OIDCCallbackPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route
@@ -111,6 +116,7 @@ function App() {
                   <Route path="/calendar" element={<FeatureRoute feature="calendar"><CalendarPage /></FeatureRoute>} />
                   <Route path="/meetings" element={<FeatureRoute feature="meetings"><MeetingsPage /></FeatureRoute>} />
                   <Route path="/cameras" element={<FeatureRoute feature="cameras"><CamerasPage /></FeatureRoute>} />
+                  <Route path="/inadimplencia" element={<FeatureRoute feature="inadimplencia"><InadimplenciaPage /></FeatureRoute>} />
                   <Route path="/pabx" element={<PabxPage />} />
                   <Route path="/groups" element={<ModuleRoute module="split_groups"><GroupsPage /></ModuleRoute>} />
                   <Route path="/groups/:id" element={<ModuleRoute module="split_groups"><GroupDetailPage /></ModuleRoute>} />

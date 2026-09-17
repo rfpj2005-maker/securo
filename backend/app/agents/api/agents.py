@@ -43,6 +43,20 @@ async def get_default_agent(
     return agent
 
 
+@router.get("/siprov", response_model=AgentRead)
+async def get_siprov_agent(
+    ctx: WorkspaceContext = Depends(current_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Resolves the CURRENT workspace's Siprov agent (by name) — see
+    agent_service.get_siprov_agent. Backs the nav link so it works from
+    whichever workspace actually owns a Siprov agent, no hardcoded id."""
+    agent = await agent_service.get_siprov_agent(session, ctx.workspace.id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="no Siprov agent in this workspace")
+    return agent
+
+
 @router.post("", response_model=AgentRead, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     data: AgentCreate,

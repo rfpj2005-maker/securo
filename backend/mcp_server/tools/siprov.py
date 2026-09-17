@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
+import os
 import time
+from datetime import date
 from typing import Any, Optional
 
 import httpx
@@ -33,6 +36,7 @@ async def _require_business_member(session: AsyncSession, ctx: CallContext) -> N
     associado/financial data that has nothing to do with them."""
     if not await is_business_member(session, ctx.user_id):
         raise PermissionError("Siprov tools are only available to business workspace members.")
+
 
 # Module-level cache: {"token": str, "expires_at": float (unix seconds)}.
 # One Siprov account for the whole instance, so a single shared cache is
@@ -176,18 +180,97 @@ async def _siprov_generate_report(base_path: str, body: dict[str, Any]) -> Any:
 
 # Report responses can run to hundreds of rows — same reasoning as
 # siprov_boletos: dumping everything into the LLM's context is wasteful
-# when it usually wants a count, not every row.
+# when it usually wants a count, not every row. Siprov's report-download
+# endpoint (unlike the live-listing ones) is NOT paginated — one call
+# already returns every row (confirmed live: 644 items in one response),
+# so this cap is purely about what we hand back to the model, not a real
+# fetch limit. That means grouping below runs over the TRUE full set,
+# not just the capped sample.
 _REPORT_ITEMS_CAP = 50
 
 
-def _cap_report_items(items: Any) -> dict[str, Any]:
+def _dedupe_cancelamento_rows(items: list[dict]) -> list[dict]:
+    """Layout 4008 (cancelamentos) emits one row per financial component
+    of the same cancellation — itens_titular_valor_total varies between
+    rows, everything else identifying the event is identical. Confirmed
+    live against real data: 1,277 raw rows collapsed to 538 real
+    cancellation events (2-5 duplicate rows per event). Uncorrected, every
+    count/aggregate off this report (including por_grupo) overcounts by
+    roughly 2-2.5x — this was caught live when the model had to eyeball
+    and disclaim it manually; fixing it here means it never has to again.
+    """
+    seen: dict[tuple, dict] = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        key = (
+            it.get("veiculo_placa_veiculo"),
+            it.get("beneficio_data_cancelamento"),
+            it.get("beneficio_nome_consultor"),
+            it.get("beneficio_data_ativacao"),
+        )
+        if key not in seen:
+            seen[key] = it
+    return list(seen.values())
+
+
+def _tenure_stats(items: list[dict]) -> Optional[dict[str, Any]]:
+    """Days between ativação and cancelamento, over every deduped row that
+    has both dates — average and median. Cheap now that the report is
+    deduped and the full set (not just the capped sample) is in memory;
+    answers a question ('quanto tempo até cancelar?') the model
+    previously had to decline for lack of the complete dataset."""
+    days: list[int] = []
+    for it in items:
+        start, end = it.get("beneficio_data_ativacao"), it.get("beneficio_data_cancelamento")
+        if not start or not end:
+            continue
+        try:
+            delta = (date.fromisoformat(end) - date.fromisoformat(start)).days
+        except ValueError:
+            continue
+        if delta >= 0:
+            days.append(delta)
+    if not days:
+        return None
+    days.sort()
+    mid = len(days) // 2
+    median = days[mid] if len(days) % 2 else (days[mid - 1] + days[mid]) / 2
+    return {
+        "media_dias": round(sum(days) / len(days), 1),
+        "mediana_dias": median,
+        "amostra": len(days),
+    }
+
+
+def _cap_report_items(items: Any, *, group_by: Optional[str] = None) -> dict[str, Any]:
+    """`group_by`, when given a field name present on the rows (e.g.
+    'beneficio_nome_consultor'), adds a `por_grupo` breakdown — counted
+    over every row Siprov returned, not just the capped `itens` sample —
+    so a question like 'quantos cancelamentos por consultora' doesn't
+    require walking the report in monthly windows and summing by hand."""
     if not isinstance(items, list):
         return {"quantidade": 0, "itens": [], "itens_omitidos": 0}
-    return {
+    result: dict[str, Any] = {
         "quantidade": len(items),
         "itens": items[:_REPORT_ITEMS_CAP],
         "itens_omitidos": max(0, len(items) - _REPORT_ITEMS_CAP),
     }
+    if group_by:
+        counts: dict[str, int] = {}
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            key = it.get(group_by)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+        if counts:
+            result["por_grupo"] = [
+                {"valor": k, "quantidade": v}
+                for k, v in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+            ]
+    return result
 
 
 _NOME_FIELD_CANDIDATES = ("nome", "nomeAssociado", "nomeCompleto", "nomePessoa")
@@ -254,13 +337,46 @@ async def siprov_buscar_associado(
 
 
 @tool(
+    name="siprov_beneficio",
+    description=(
+        "Look up an associado's benefício (the actual plan/contract) — separate from "
+        "siprov_buscar_associado, which only returns personal/vehicle registration data. "
+        "This is where the responsible consultor (nomeConsultor), the monthly plan value "
+        "(valorMensalidade), plan name, and situação live. Use this to answer 'who is the "
+        "consultant for X' or 'how much does X pay per month' — siprov_buscar_associado "
+        "cannot answer those. Requires cpf, cnpj, or placa (resolve from "
+        "siprov_buscar_associado if you only have a name)."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "cpf": {"type": "string"},
+            "cnpj": {"type": "string"},
+            "placa": {"type": "string"},
+        },
+        "additionalProperties": False,
+    },
+    tags=["read", "siprov"],
+)
+async def siprov_beneficio(
+    *, session: AsyncSession, ctx: CallContext, cpf: str | None = None, cnpj: str | None = None, placa: str | None = None
+) -> Any:
+    await _require_business_member(session, ctx)
+    if not cpf and not cnpj and not placa:
+        raise ValueError("Provide at least one of: cpf, cnpj, placa")
+    return await _siprov_get("/ext/beneficio", {"cpf": cpf, "cnpj": cnpj, "placa": placa})
+
+
+@tool(
     name="siprov_eventos",
     description=(
         "Search eventos (sinistros/acionamentos de proteção veicular — claim/incident records) "
         "in Siprov. To find a specific person's events, resolve them with siprov_buscar_associado "
         "first and pass their cod_pessoa (or cpf_cnpj) here — there is no free-text name filter on "
         "this endpoint. Otherwise filter by protocolo or by date range. Returns protocolo, "
-        "tipoEvento, situacao, dataAbertura, dataEvento per evento."
+        "tipoEvento, situacao, dataAbertura, dataEvento, codEvento per evento — NOT a cost/value "
+        "field (events themselves have no valor). For the cost of a specific event, take its "
+        "codEvento and call siprov_evento_orcamentos."
     ),
     parameters={
         "type": "object",
@@ -305,6 +421,30 @@ async def siprov_eventos(
 
 
 @tool(
+    name="siprov_evento_orcamentos",
+    description=(
+        "Get the orçamentos (cost quotes) for one evento — this is where an evento's cost "
+        "actually lives (events themselves have no valor field). Get cod_evento from "
+        "siprov_eventos first. An evento can have multiple orçamentos (different fornecedores, "
+        "or a revised quote) — `situacao` on each tells you which is approved/pending/rejected; "
+        "don't assume the first one is the real cost, check situacao."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "cod_evento": {"type": "integer", "description": "From siprov_eventos' codEvento field"},
+        },
+        "required": ["cod_evento"],
+        "additionalProperties": False,
+    },
+    tags=["read", "siprov"],
+)
+async def siprov_evento_orcamentos(*, session: AsyncSession, ctx: CallContext, cod_evento: int) -> Any:
+    await _require_business_member(session, ctx)
+    return await _siprov_get(f"/ext/evento/{cod_evento}/orcamentos")
+
+
+@tool(
     name="siprov_titulos_financeiros",
     description=(
         "List financial títulos (accounts receivable/payable) from Siprov. "
@@ -339,23 +479,29 @@ _BOLETO_ITEMS_CAP = 50
 @tool(
     name="siprov_boletos",
     description=(
-        "List/total boletos (payment slips) due in a date range. Handles Siprov's 100-item-per-page "
-        "limit internally — walks every page and returns the TRUE total count and a precomputed "
-        "`valor_total` (sum of `valor` across every matching boleto, not just the ones shown), so "
-        "you never need to paginate manually or sum amounts yourself. The raw `itens` list is capped "
-        "at 50 for context size — `itens_omitidos` tells you how many more exist beyond that; use "
-        "`quantidade`/`valor_total` for counts and totals, not len(itens).\n\n"
+        "List/total boletos (payment slips) due in a date range, optionally for one specific "
+        "associado (pass cpf_cnpj — e.g. 'is this person up to date on their payments'). Handles "
+        "Siprov's 100-item-per-page limit internally — walks every page and returns the TRUE total "
+        "count and a precomputed `valor_total` (sum of `valor` across every matching boleto, not "
+        "just the ones shown), so you never need to paginate manually or sum amounts yourself. The "
+        "raw `itens` list is capped at 50 for context size — `itens_omitidos` tells you how many "
+        "more exist beyond that; use `quantidade`/`valor_total` for counts and totals, not "
+        "len(itens).\n\n"
         "IMPORTANT: when `situacao` is omitted, Siprov does NOT return every boleto — it silently "
         "returns only 'active' ones (Aberto/Pendente/Protestado-style), EXCLUDING 'Liquidado' (paid) "
-        "and 'Cancelado'. To answer 'how many were paid' or 'give me the full picture', pass situacao "
-        "explicitly — e.g. 'Liquidado' alone for paid ones, or ['Aberto', 'Liquidado'] for both in one "
-        "call."
+        "and 'Cancelado'. To answer 'how many were paid' or 'is this person current', pass situacao "
+        "explicitly — e.g. ['Aberto', 'Pendente', 'Liquidado', 'Cancelado', 'Protestado', 'Negociado'] "
+        "to see the whole picture for one person's payment history."
     ),
     parameters={
         "type": "object",
         "properties": {
             "data_vencimento_inicial": {"type": "string", "description": "dd/MM/yyyy"},
             "data_vencimento_final": {"type": "string", "description": "dd/MM/yyyy"},
+            "cpf_cnpj": {
+                "type": "string",
+                "description": "Restrict to one associado's boletos — from siprov_buscar_associado.",
+            },
             "situacao": {
                 "anyOf": [
                     {"type": "string", "enum": _BOLETO_SITUACOES},
@@ -378,12 +524,14 @@ async def siprov_boletos(
     ctx: CallContext,
     data_vencimento_inicial: str,
     data_vencimento_final: str,
+    cpf_cnpj: str | None = None,
     situacao: str | list[str] | None = None,
 ) -> Any:
     await _require_business_member(session, ctx)
     base_params = {
         "dataVencimentoInicial": data_vencimento_inicial,
         "dataVencimentoFinal": data_vencimento_final,
+        "cpfCnpj": cpf_cnpj,
         # The API expects the param repeated for multiple values — httpx
         # does that automatically for a list, so normalize a single string
         # into a one-item list rather than special-casing it.
@@ -424,6 +572,17 @@ async def siprov_boletos(
         "user needs a different report shape (new adesões, etc.), a different "
         "cod_layout would need to be found in Siprov's own report configuration "
         "first; don't guess a value that hasn't been confirmed.\n\n"
+        "For layout 4008, two things are already handled server-side so you "
+        "don't need to catch or disclaim them yourself: (1) Siprov emits 2-5 "
+        "rows per real cancellation (one per financial component of the same "
+        "event) — already deduplicated to one row per real vehicle/event before "
+        "you see it, so `quantidade`/`itens`/`por_grupo` are true counts, not "
+        "inflated line counts. (2) the response includes `tempo_ate_cancelamento` "
+        "({media_dias, mediana_dias, amostra}) — days between ativação and "
+        "cancelamento, computed over the full deduped set. Two dimensions the "
+        "report genuinely does NOT have, so don't imply you can get them from "
+        "this tool: city/location, and the vehicle's own market value (only "
+        "`beneficio_valor_mensalidade`, the plan price, is present).\n\n"
         "IMPORTANT: omitting BOTH date_cancelamento_* and data_adesao_* does not "
         "mean 'no filter, show recent activity' — it returns Siprov's ENTIRE "
         "historical dataset for this layout (thousands of rows), mixing every "
@@ -434,7 +593,16 @@ async def siprov_boletos(
         "narrows the result. `quantidade` in the response is the true total "
         "count (computed from Siprov's own report metadata) — trust it over "
         "counting `itens`, which is capped at 50 for context size; "
-        "`itens_omitidos` says how many more exist beyond that."
+        "`itens_omitidos` says how many more exist beyond that. That cap is "
+        "ONLY about what's shown to you — Siprov's report download is not "
+        "paginated, one call already returns every row.\n\n"
+        "The response also includes `por_grupo`: a count of rows per "
+        "consultor (field beneficio_nome_consultor), sorted highest first, "
+        "e.g. {valor: 'FULANO', quantidade: 12}. Use this directly for any "
+        "per-consultora question (cancellations by consultant, a rate/index "
+        "study, etc.) instead of walking the date range in monthly windows "
+        "and summing itens by hand — it's already the true total per "
+        "consultor for whatever period you queried."
     ),
     parameters={
         "type": "object",
@@ -491,7 +659,15 @@ async def siprov_relatorio_adesao(
             "dataAdesaoFinal": data_adesao_final,
         },
     )
-    return _cap_report_items(items)
+    result_extra: dict[str, Any] = {}
+    if cod_layout == 4008 and isinstance(items, list):
+        items = _dedupe_cancelamento_rows(items)
+        tenure = _tenure_stats(items)
+        if tenure:
+            result_extra["tempo_ate_cancelamento"] = tenure
+    result = _cap_report_items(items, group_by="beneficio_nome_consultor")
+    result.update(result_extra)
+    return result
 
 
 @tool(
@@ -551,3 +727,138 @@ async def siprov_relatorio_financeiro(
         },
     )
     return _cap_report_items(items)
+
+
+# Local cache of the full associado portfolio, refreshed straight from the
+# live Siprov API every 6h by a Celery beat task (app.tasks.siprov_tasks —
+# see backend/app/worker.py), independent of both this MCP server process
+# and of any user's personal files. This used to read a CSV mirrored from
+# the workspace admin's personal Obsidian vault; that vault moved off this
+# server entirely on 2026-09-03/04 (to a local+Obsidian-Sync setup on his
+# own machine, specifically so personal data stays out of the shared
+# Amparar server) which orphaned that approach. Sourcing the cache from
+# the API directly instead of a personal vault also means this is regular
+# shared business data now, not something that needs restricting to one
+# person — same _require_business_member as every other Siprov tool here.
+_CARTEIRA_CACHE_PATH = "/app/data/siprov_cache/carteira.json"
+_CARTEIRA_ITEMS_CAP = 100
+_CARTEIRA_GROUP_FIELDS = {"cidade": "cidade", "uf": "uf", "situacao": "situacao"}
+
+
+def _load_carteira_cache() -> Optional[dict[str, Any]]:
+    if not os.path.isfile(_CARTEIRA_CACHE_PATH):
+        return None
+    with open(_CARTEIRA_CACHE_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _normalize_digits(s: str) -> str:
+    return "".join(c for c in s if c.isdigit())
+
+
+def _carteira_group_value(item: dict, field: str) -> str:
+    """cidade/uf live under item['endereco'] in the raw /ext/associado shape;
+    situacao is top-level. Centralized here so the filter and the grouping
+    below can't drift out of sync on where a field actually lives."""
+    if field in ("cidade", "uf"):
+        return ((item.get("endereco") or {}).get(field) or "").strip()
+    return (item.get(field) or "").strip()
+
+
+@tool(
+    name="siprov_carteira_cache",
+    description=(
+        "Search the FULL associado portfolio from a local cache (refreshed straight "
+        "from the live Siprov API every 6h) instead of a live call — use this for two "
+        "situations the other siprov_* tools can't handle well:\n"
+        "1. Bulk/aggregate questions across the whole portfolio in one call — 'quantos "
+        "associados em Contagem', 'cancelados por cidade', 'associados ativos em MG' — "
+        "pass agrupar_por ('cidade', 'uf', or 'situacao') to get real counts per value "
+        "over the FULL cache (not just the capped sample shown in itens).\n"
+        "2. A fallback when siprov_buscar_associado / siprov_beneficio are down (this "
+        "reads a local file, no live API call at all).\n\n"
+        "Trade-off: data is as of the last refresh (up to ~6h old), not real-time — for "
+        "one associado's current exact status, prefer siprov_buscar_associado. Fields "
+        "are the raw Siprov shape: codPessoa, nomePessoa, cpfCnpj, sexo, idade, "
+        "endereco (nested: logradouro, numero, bairro, cidade, uf, cep), "
+        "telefoneCelular, email, placa, chassi, sequencial, tipoBeneficio, situacao, "
+        "dataCadastro, dataAdesao, dataAtivacao, numeroCartaoDesconto, planos (list). "
+        "No `consultor` field here — for that, use siprov_beneficio per person."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "nome": {"type": "string", "description": "Substring match on nomePessoa, case-insensitive"},
+            "cpf": {"type": "string", "description": "Digits only or formatted, either works"},
+            "cidade": {"type": "string", "description": "Exact match, case-insensitive"},
+            "uf": {"type": "string"},
+            "situacao": {"type": "string", "description": "e.g. Ativo, Cancelado, Substituido"},
+            "placa": {"type": "string"},
+            "agrupar_por": {
+                "type": "string",
+                "enum": list(_CARTEIRA_GROUP_FIELDS.keys()),
+                "description": "Adds a `por_grupo` count breakdown over the full filtered set, e.g. 'cidade' for cancellations-by-city.",
+            },
+        },
+        "additionalProperties": False,
+    },
+    tags=["read", "siprov"],
+)
+async def siprov_carteira_cache(
+    *,
+    session: AsyncSession,
+    ctx: CallContext,
+    nome: str | None = None,
+    cpf: str | None = None,
+    cidade: str | None = None,
+    uf: str | None = None,
+    situacao: str | None = None,
+    placa: str | None = None,
+    agrupar_por: str | None = None,
+) -> Any:
+    await _require_business_member(session, ctx)
+    cache = _load_carteira_cache()
+    if cache is None:
+        raise RuntimeError(
+            "Cache local da carteira ainda não existe — a tarefa periódica "
+            "(app.tasks.siprov_tasks.sync_siprov_carteira) pode não ter rodado ainda. "
+            "Use siprov_buscar_associado (API ao vivo) como alternativa."
+        )
+    rows = cache.get("itens") or []
+
+    cpf_digits = _normalize_digits(cpf) if cpf else None
+
+    def matches(r: dict) -> bool:
+        if nome and nome.lower() not in (r.get("nomePessoa") or "").lower():
+            return False
+        if cpf_digits and cpf_digits not in _normalize_digits(r.get("cpfCnpj") or ""):
+            return False
+        if cidade and cidade.lower() != _carteira_group_value(r, "cidade").lower():
+            return False
+        if uf and uf.lower() != _carteira_group_value(r, "uf").lower():
+            return False
+        if situacao and situacao.lower() != (r.get("situacao") or "").lower():
+            return False
+        if placa and placa.lower() != (r.get("placa") or "").lower():
+            return False
+        return True
+
+    filtered = [r for r in rows if matches(r)]
+    result: dict[str, Any] = {
+        "cache_generated_at": cache.get("generated_at"),
+        "quantidade": len(filtered),
+        "itens": filtered[:_CARTEIRA_ITEMS_CAP],
+        "itens_omitidos": max(0, len(filtered) - _CARTEIRA_ITEMS_CAP),
+    }
+    if agrupar_por:
+        counts: dict[str, int] = {}
+        for r in filtered:
+            key = _carteira_group_value(r, agrupar_por)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+        result["por_grupo"] = [
+            {"valor": k, "quantidade": v}
+            for k, v in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+    return result

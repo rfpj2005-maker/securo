@@ -60,6 +60,14 @@ celery_app.conf.beat_schedule = {
         # itself no-ops instantly if VAPID isn't configured.
         "schedule": 60,
     },
+    "sync-siprov-carteira": {
+        "task": "app.tasks.siprov_tasks.sync_siprov_carteira",
+        # Same cadence already used elsewhere for this exact portfolio pull
+        # (Painel Amparar's negativados sync) — frequent enough that the
+        # local cache is never far behind, without hammering Siprov's auth
+        # endpoint (which rate-limits aggressively on back-to-back calls).
+        "schedule": 60 * 60 * 6,
+    },
 }
 
 celery_app.conf.include = [
@@ -69,6 +77,7 @@ celery_app.conf.include = [
     "app.tasks.fx_rate_tasks",
     "app.tasks.meeting_tasks",
     "app.tasks.task_reminder_tasks",
+    "app.tasks.siprov_tasks",
     # Optional agents module — registering the import is harmless when
     # AGENTS_ENABLED=false (the task just won't be dispatched).
     "app.agents.tasks.ingest",

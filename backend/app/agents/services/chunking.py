@@ -57,10 +57,31 @@ def parse_pdf_to_text(payload: bytes) -> str:
     return "\n\n".join(pages)
 
 
+def parse_docx_to_text(payload: bytes) -> str:
+    from docx import Document
+    doc = Document(io.BytesIO(payload))
+    parts = [p.text for p in doc.paragraphs if p.text.strip()]
+    # Tables carry real content in regulation-style docs (coverage limits,
+    # fee tables) — walked separately since python-docx doesn't include
+    # them in doc.paragraphs.
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n\n".join(parts)
+
+
+_DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
 def extract_text(payload: bytes, mime: str, filename: str = "") -> str:
     mime_l = (mime or "").lower()
-    if "pdf" in mime_l or filename.lower().endswith(".pdf"):
+    name_l = filename.lower()
+    if "pdf" in mime_l or name_l.endswith(".pdf"):
         return parse_pdf_to_text(payload)
+    if mime_l == _DOCX_MIME or name_l.endswith(".docx"):
+        return parse_docx_to_text(payload)
     # Default: treat as utf-8 text (covers .md, .txt, .markdown, .rst).
     try:
         return payload.decode("utf-8", errors="replace")

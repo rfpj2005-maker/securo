@@ -147,6 +147,23 @@ async def get_default_agent(
     )).scalar_one_or_none()
 
 
+async def get_siprov_agent(session: AsyncSession, workspace_id: uuid.UUID) -> Optional[Agent]:
+    """The Siprov nav link resolves this per-workspace instead of a single
+    hardcoded agent id — Raimundo's original agent lives in his personal
+    workspace (full history + his own Gmail tools), the shared one William/
+    Roberta use lives in the business workspace; neither should force a
+    workspace switch just to reach whichever one belongs there. Matched by
+    name since that's the only thing tagging "this is the Siprov agent"
+    today — good enough while there's at most one per workspace."""
+    return (await session.execute(
+        select(Agent).where(
+            Agent.workspace_id == workspace_id,
+            Agent.name == "Siprov",
+            Agent.is_archived.is_(False),
+        )
+    )).scalar_one_or_none()
+
+
 async def delete_agent(
     session: AsyncSession, agent_id: uuid.UUID, workspace_id: uuid.UUID
 ) -> bool:

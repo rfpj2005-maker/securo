@@ -22,6 +22,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Literal, Optional, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -210,6 +211,18 @@ _RUNTIME_GUARDRAIL = (
     "`description_contains` to `aggregate` rather than listing and "
     "summing. The only acceptable place to do arithmetic yourself is a "
     "single combine step on tool outputs (e.g. `1847 * 12` = 22164).\n"
+    "\n"
+    "8. Never narrate calling, retrying, or getting an error from a tool "
+    "you were not actually given. Your only tools are the ones in this "
+    "turn's tool list — if something isn't there (email search, a web "
+    "browser, a filesystem, etc.), you do not have it, full stop. Do not "
+    "write prose like 'let me check your inbox', 'the search failed with "
+    "an auth error, retrying', or 'I found an email about X' unless a "
+    "real tool call actually happened and returned that. If you don't "
+    "have a way to answer, say so in one sentence and stop — inventing a "
+    "plausible-sounding search-and-found narrative is a fabrication, not "
+    "a shortcut, even if the details (names, dates, numbers) feel "
+    "specific enough to sound real.\n"
 )
 
 
@@ -265,7 +278,7 @@ def _build_agent_identity_primer(agent: Agent) -> str:
     """Baseline persona injected BEFORE the user's system_prompt.
 
     Tells the model two things it had no way to know before:
-      1. It's running inside Securo — an open-source, self-hosted
+      1. It's running inside Bússola — an open-source, self-hosted
          personal-finance app — and what kind of help that implies.
       2. Its own name and stated role, taken from the agent row itself
          (the user picked them in the UI).
@@ -277,7 +290,7 @@ def _build_agent_identity_primer(agent: Agent) -> str:
     description = (agent.description or "").strip()
     lines = [
         "## Who you are",
-        f"You are **{name}**, an AI assistant running inside **Securo** — an "
+        f"You are **{name}**, an AI assistant running inside **Bússola** — an "
         "open-source, self-hosted personal-finance app the user owns and "
         "runs on their own infrastructure. The user is the owner of the "
         "data you operate on; everything you read/write belongs to them.",
@@ -384,6 +397,17 @@ class AgentExecutor:
         # not just the per-turn answer.
         if agent.system_prompt and agent.system_prompt.strip():
             messages.append(ChatMessage(role="system", content=agent.system_prompt))
+        # Today's date — always sent, independent of auto_context. An
+        # agent with auto_context off (e.g. Siprov, which deliberately
+        # skips the personal-finance account primer) still needs to know
+        # what day it is for anything date-relative ("mês passado",
+        # "esta semana"); without this it has to stop and ask, which
+        # defeats the point of a report tool. Bare UTC date is enough
+        # precision for "which month" questions.
+        messages.append(ChatMessage(
+            role="system",
+            content=f"Today's date is {datetime.now(timezone.utc).date().isoformat()} (UTC).",
+        ))
         # Optional context primer — user name, currency, accounts, etc.
         # Cheap orientation so the agent doesn't need to call list_accounts
         # on every "what's my balance?" question.

@@ -66,9 +66,13 @@ async def resolve_workspace_id(session, ctx) -> uuid.UUID:
     """
     if ctx.workspace_id is not None:
         return ctx.workspace_id
+    from app.models.user import User
     from app.services.workspace_service import get_default_workspace
 
-    ws = await get_default_workspace(session, ctx.user_id)
+    user = await session.get(User, ctx.user_id)
+    if user is None:
+        raise ValueError("No workspace available for this user")
+    ws = await get_default_workspace(session, user)
     if ws is None:
         raise ValueError("No workspace available for this user")
     return ws.id

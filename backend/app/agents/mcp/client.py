@@ -67,7 +67,13 @@ class MCPClient:
     async def _post(self, method: str, params: dict[str, Any], *, token: str) -> Any:
         payload = {"jsonrpc": "2.0", "id": self._id(), "method": method, "params": params}
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+        # 150s, not the previous 60s: siprov_relatorio_* tools poll Siprov's
+        # async report-generation endpoint for up to ~60s on their own
+        # (_REPORT_POLL_MAX_ATTEMPTS * _REPORT_POLL_INTERVAL_SECONDS) before
+        # even starting the download — a wide, unfiltered date range (a
+        # full year, 1000+ rows) genuinely needs the extra headroom. Seen
+        # live: this exact call timing out mid-report on the old 60s limit.
+        async with httpx.AsyncClient(timeout=httpx.Timeout(150.0, connect=10.0)) as client:
             resp = await client.post(self.url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()

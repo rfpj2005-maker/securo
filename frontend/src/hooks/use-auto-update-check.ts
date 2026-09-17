@@ -6,7 +6,11 @@ const listeners = new Set<() => void>()
 
 function getSnapshot(): boolean {
   const raw = localStorage.getItem(STORAGE_KEY)
-  return raw === null ? true : raw === 'true'
+  // Defaults to off on this instance — Claude tracks upstream releases and
+  // tells the owner directly when one is actually worth adopting, instead
+  // of the app nagging everyone about every tag. Still a real per-browser
+  // toggle if someone wants it back on for themselves.
+  return raw === null ? false : raw === 'true'
 }
 
 function subscribe(cb: () => void) {

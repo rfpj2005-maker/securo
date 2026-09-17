@@ -91,4 +91,16 @@ export function resolveSupportedLang(lng?: string | null): SupportedLang {
   return 'en'
 }
 
+// Every in-app language picker calls this instead of i18n.changeLanguage
+// directly, so AuthProvider (auth-context.tsx) can tell "this browser
+// picked a language on purpose" apart from "this browser just happens to
+// have a cached value" — an explicit pick sticks forever; anything else
+// gets re-seeded from the account's stored preference on every login,
+// which is what actually fixes existing sessions stuck on the old
+// English-fallback default instead of only new ones.
+export function changeLanguageExplicitly(lng: string) {
+  localStorage.setItem('explicitLangChoice', '1')
+  i18n.changeLanguage(lng)
+}
+
 export default i18n

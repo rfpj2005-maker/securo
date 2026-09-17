@@ -8,7 +8,7 @@ import { useWorkspace } from '@/contexts/workspace-context'
 import { type FeatureId } from '@/lib/features'
 import { CollectionSelector } from '@/components/collection-selector'
 import { auth as authApi, backup as backupApi, admin as adminApi, agents as agentsApi } from '@/lib/api'
-import { resolveSupportedLang } from '@/lib/i18n'
+import { resolveSupportedLang, changeLanguageExplicitly } from '@/lib/i18n'
 import { toast } from 'sonner'
 import { OnboardingTour } from '@/components/onboarding-tour'
 import { useTheme } from 'next-themes'
@@ -759,7 +759,7 @@ function UserMenu({
                 {t('setup.language')}
               </DropdownMenuLabel>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('ru')}
+                onClick={() => changeLanguageExplicitly('ru')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Русский</span>
@@ -768,7 +768,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('de')}
+                onClick={() => changeLanguageExplicitly('de')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Deutsch</span>
@@ -777,7 +777,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('uk')}
+                onClick={() => changeLanguageExplicitly('uk')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Українська</span>
@@ -786,7 +786,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('pt-BR')}
+                onClick={() => changeLanguageExplicitly('pt-BR')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Português (BR)</span>
@@ -795,7 +795,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('pt-PT')}
+                onClick={() => changeLanguageExplicitly('pt-PT')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Português (PT)</span>
@@ -804,7 +804,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('en')}
+                onClick={() => changeLanguageExplicitly('en')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">English</span>
@@ -813,7 +813,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('es')}
+                onClick={() => changeLanguageExplicitly('es')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Español</span>
@@ -822,7 +822,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('pl')}
+                onClick={() => changeLanguageExplicitly('pl')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Polski</span>
@@ -831,7 +831,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('it')}
+                onClick={() => changeLanguageExplicitly('it')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Italiano</span>
@@ -840,7 +840,7 @@ function UserMenu({
                 )}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => i18n.changeLanguage('fr')}
+                onClick={() => changeLanguageExplicitly('fr')}
                 className="flex items-center gap-2"
               >
                 <span className="flex-1">Français</span>

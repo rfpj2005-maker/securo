@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 import { setup } from '@/lib/api'
-import { resolveSupportedLang, SUPPORTED_LANGS } from '@/lib/i18n'
+import { resolveSupportedLang, SUPPORTED_LANGS, changeLanguageExplicitly } from '@/lib/i18n'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -108,7 +108,7 @@ export default function SetupPage() {
                   <Globe size={14} />
                   {t('setup.language')}
                 </Label>
-                <Select value={currentLang} onValueChange={(lng) => i18n.changeLanguage(lng)}>
+                <Select value={currentLang} onValueChange={(lng) => changeLanguageExplicitly(lng)}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>

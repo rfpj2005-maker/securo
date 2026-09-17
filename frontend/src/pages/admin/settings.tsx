@@ -47,12 +47,13 @@ export default function AdminSettingsPage() {
   const [formEmail, setFormEmail] = useState('')
   const [formPassword, setFormPassword] = useState('')
   const [formIsAdmin, setFormIsAdmin] = useState(false)
-  const [formLanguage, setFormLanguage] = useState('en')
+  const [formLanguage, setFormLanguage] = useState('pt-BR')
   const [formCurrency, setFormCurrency] = useState('USD')
 
   const [editEmail, setEditEmail] = useState('')
   const [editIsActive, setEditIsActive] = useState(true)
   const [editIsAdmin, setEditIsAdmin] = useState(false)
+  const [editLanguage, setEditLanguage] = useState('pt-BR')
   const [editPassword, setEditPassword] = useState('')
   const [showPasswordField, setShowPasswordField] = useState(false)
 
@@ -255,7 +256,7 @@ export default function AdminSettingsPage() {
     setFormEmail('')
     setFormPassword('')
     setFormIsAdmin(false)
-    setFormLanguage('en')
+    setFormLanguage('pt-BR')
     // New users default to the admin's current display currency so they
     // follow the currency the workspace is running in.
     setFormCurrency(currentUser?.preferences?.currency_display ?? 'USD')
@@ -266,6 +267,7 @@ export default function AdminSettingsPage() {
     setEditEmail(u.email)
     setEditIsActive(u.is_active)
     setEditIsAdmin(u.is_superuser)
+    setEditLanguage(u.preferences?.language ?? 'pt-BR')
     setEditPassword('')
     setShowPasswordField(false)
   }
@@ -719,6 +721,13 @@ export default function AdminSettingsPage() {
               if (editIsActive !== editUser.is_active) updates.is_active = editIsActive
               if (editIsAdmin !== editUser.is_superuser) updates.is_superuser = editIsAdmin
               if (editPassword && editPassword.length >= 8) updates.password = editPassword
+              // The backend replaces preferences wholesale (no merge), so
+              // send the user's existing preferences with just language
+              // overridden — otherwise this would silently reset their
+              // currency/timezone/other preferences back to defaults.
+              if (editLanguage !== (editUser.preferences?.language ?? 'pt-BR')) {
+                updates.preferences = { ...editUser.preferences, language: editLanguage }
+              }
               updateMutation.mutate(updates as { id: string })
             }}>
               <div className="space-y-4 py-2">
@@ -740,6 +749,25 @@ export default function AdminSettingsPage() {
                 <div className="space-y-1.5">
                   <Label className="text-[13px]">{t('admin.users.email')}</Label>
                   <Input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} required autoComplete="off" className="h-10 rounded-lg" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[13px]">{t('setup.language')}</Label>
+                  <select
+                    value={editLanguage}
+                    onChange={(e) => setEditLanguage(e.target.value)}
+                    className="w-full h-10 rounded-lg border border-input bg-card px-3 text-sm"
+                  >
+                    <option value="en">English</option>
+                    <option value="de">Deutsch</option>
+                    <option value="ru">Русский</option>
+                    <option value="uk">Українська</option>
+                    <option value="pt-BR">Português (BR)</option>
+                    <option value="pt-PT">Português (PT)</option>
+                    <option value="es">Español</option>
+                    <option value="pl">Polski</option>
+                    <option value="it">Italiano</option>
+                    <option value="fr">Français</option>
+                  </select>
                 </div>
                 {showPasswordField ? (
                   <div className="space-y-1.5">

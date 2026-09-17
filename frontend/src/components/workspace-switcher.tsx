@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/auth-context'
 import { useWorkspace } from '@/contexts/workspace-context'
 import { workspaces as workspacesApi } from '@/lib/api'
-import { resolveSupportedLang } from '@/lib/i18n'
+import { resolveSupportedLang, changeLanguageExplicitly } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -296,70 +296,70 @@ export function WorkspaceSwitcher({
                   {t('setup.language')}
                 </DropdownMenuLabel>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('ru')}
+                  onClick={() => changeLanguageExplicitly('ru')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Русский</span>
                   {currentLang === 'ru' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('de')}
+                  onClick={() => changeLanguageExplicitly('de')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Deutsch</span>
                   {currentLang === 'de' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('uk')}
+                  onClick={() => changeLanguageExplicitly('uk')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Українська</span>
                   {currentLang === 'uk' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('pt-BR')}
+                  onClick={() => changeLanguageExplicitly('pt-BR')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Português (BR)</span>
                   {currentLang === 'pt-BR' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('pt-PT')}
+                  onClick={() => changeLanguageExplicitly('pt-PT')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Português (PT)</span>
                   {currentLang === 'pt-PT' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('en')}
+                  onClick={() => changeLanguageExplicitly('en')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">English</span>
                   {currentLang === 'en' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('es')}
+                  onClick={() => changeLanguageExplicitly('es')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Español</span>
                   {currentLang === 'es' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('pl')}
+                  onClick={() => changeLanguageExplicitly('pl')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Polski</span>
                   {currentLang === 'pl' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('it')}
+                  onClick={() => changeLanguageExplicitly('it')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Italiano</span>
                   {currentLang === 'it' && <Check size={13} className="text-primary" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => i18n.changeLanguage('fr')}
+                  onClick={() => changeLanguageExplicitly('fr')}
                   className="flex items-center gap-2"
                 >
                   <span className="flex-1">Français</span>

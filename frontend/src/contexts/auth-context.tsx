@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { auth } from '@/lib/api'
+import i18n, { resolveSupportedLang } from '@/lib/i18n'
 import type { User } from '@/types'
 
 interface LoginResult {
@@ -43,6 +44,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
     }
   }, [token])
+
+  // Adopt the account's stored language preference on every login,
+  // unless this browser has an explicit in-app language pick on record
+  // (see changeLanguageExplicitly in lib/i18n.ts) — the app was rendering
+  // in English for every Brazilian teammate because nothing ever read
+  // this field at all, it just fell back to i18next's English default
+  // and then quietly cached that. Re-checking on every login (not just
+  // once) is what fixes browsers that already have that stale cached
+  // value, not only fresh ones.
+  useEffect(() => {
+    if (!user?.preferences?.language) return
+    if (localStorage.getItem('explicitLangChoice')) return
+    i18n.changeLanguage(resolveSupportedLang(user.preferences.language))
+  }, [user])
 
   // Sync token across tabs via storage events
   useEffect(() => {

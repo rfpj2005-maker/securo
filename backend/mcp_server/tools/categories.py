@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services import category_service
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import resolve_workspace_id
+from mcp_server.tools._helpers import resolve_workspace_id_gated
 
 
 @tool(
@@ -25,7 +25,7 @@ async def list_categories(
     session: AsyncSession,
     ctx: CallContext,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "categories")
     cats = await category_service.get_categories(session, ws_id)
     items = [
         {

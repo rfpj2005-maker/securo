@@ -9,7 +9,7 @@ from app.models.transaction import Transaction
 from app.models.category import Category
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import num, parse_date, parse_uuid_list, resolve_workspace_id
+from mcp_server.tools._helpers import num, parse_date, parse_uuid_list, resolve_workspace_id_gated
 
 
 @tool(
@@ -64,7 +64,7 @@ async def aggregate(
     # Hard cap regardless of LLM input — keeps payload small enough for
     # token-tight providers.
     limit = max(1, min(int(limit), 50))
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "transactions")
     amount_col = func.coalesce(Transaction.amount_primary, Transaction.amount)
 
     # Group expression + label expression.

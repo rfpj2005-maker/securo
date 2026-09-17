@@ -209,7 +209,7 @@ app.include_router(goals_router, dependencies=[Depends(require_module("goals"))]
 app.include_router(groups_router, dependencies=[Depends(require_module("split_groups"))])
 app.include_router(assets_router, dependencies=[Depends(require_module("assets"))])
 app.include_router(asset_groups_router, dependencies=[Depends(require_module("assets"))])
-app.include_router(collections_router)
+app.include_router(collections_router, dependencies=[Depends(require_module("accounts"))])
 app.include_router(dashboard_router, dependencies=[Depends(require_module("transactions"))])
 app.include_router(reports_router, dependencies=[Depends(require_module("reports"))])
 app.include_router(search_router)

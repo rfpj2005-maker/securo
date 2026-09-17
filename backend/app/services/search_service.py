@@ -75,6 +75,7 @@ async def search_all(
     user_id: uuid.UUID,
     query: str,
     per_type_limit: int = 5,
+    allowed_types: Optional[set[str]] = None,
 ) -> list[dict[str, Any]]:
     """Search across all entity types in the current workspace.
 
@@ -86,173 +87,190 @@ async def search_all(
     caller participates in via group splits (the Splitwise projection
     — "concert" finds the parent that someone else paid for but is on
     the caller's settlement ledger).
+
+    `allowed_types` restricts which entity types are searched at all —
+    None means every type (the caller is trusted, e.g. an owner/manager).
+    The API layer passes the caller's actually-visible modules here
+    (api/search.py) so a member with, say, `transactions` hidden gets
+    those rows skipped at the query level, not merely unlabeled in the
+    response — searching a hidden module must fail closed exactly like
+    browsing it does (see require_module in workspace_context.py).
     """
     term = (query or "").strip()
     if len(term) < 1:
         return []
 
+    def _wants(t: str) -> bool:
+        return allowed_types is None or t in allowed_types
+
     pattern = _like(term)
     hits: list[SearchHit] = []
 
     # -- Transactions -------------------------------------------------------
-    from app.models.group import GroupMember
-    from app.models.transaction_split import TransactionSplit
+    if _wants("transaction"):
+        from app.models.group import GroupMember
+        from app.models.transaction_split import TransactionSplit
 
-    viewer_member_ids = select(GroupMember.id).where(
-        GroupMember.linked_user_id == user_id,
-        GroupMember.is_self.is_(False),
-    )
-    shared_tx_ids = (
-        select(TransactionSplit.transaction_id)
-        .where(TransactionSplit.group_member_id.in_(viewer_member_ids))
-        .distinct()
-    )
-    tx_result = await session.execute(
-        select(Transaction)
-        .where(
-            or_(
-                Transaction.workspace_id == workspace_id,
-                Transaction.id.in_(shared_tx_ids),
-            ),
-            or_(
-                Transaction.description.ilike(pattern, escape="\\"),
-                Transaction.payee.ilike(pattern, escape="\\"),
-                Transaction.notes.ilike(pattern, escape="\\"),
-            ),
+        viewer_member_ids = select(GroupMember.id).where(
+            GroupMember.linked_user_id == user_id,
+            GroupMember.is_self.is_(False),
         )
-        .order_by(Transaction.date.desc(), Transaction.created_at.desc())
-        .limit(per_type_limit)
-    )
-    for tx in tx_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="transaction",
-                id=str(tx.id),
-                label=tx.description,
-                subtitle=tx.payee,
-                amount=tx.amount,
-                currency=tx.currency,
-                date=tx.date.isoformat() if tx.date else None,
-                meta={
-                    "account_id": str(tx.account_id),
-                    "category_id": str(tx.category_id) if tx.category_id else None,
-                    "tx_type": tx.type,
-                },
+        shared_tx_ids = (
+            select(TransactionSplit.transaction_id)
+            .where(TransactionSplit.group_member_id.in_(viewer_member_ids))
+            .distinct()
+        )
+        tx_result = await session.execute(
+            select(Transaction)
+            .where(
+                or_(
+                    Transaction.workspace_id == workspace_id,
+                    Transaction.id.in_(shared_tx_ids),
+                ),
+                or_(
+                    Transaction.description.ilike(pattern, escape="\\"),
+                    Transaction.payee.ilike(pattern, escape="\\"),
+                    Transaction.notes.ilike(pattern, escape="\\"),
+                ),
             )
+            .order_by(Transaction.date.desc(), Transaction.created_at.desc())
+            .limit(per_type_limit)
         )
+        for tx in tx_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="transaction",
+                    id=str(tx.id),
+                    label=tx.description,
+                    subtitle=tx.payee,
+                    amount=tx.amount,
+                    currency=tx.currency,
+                    date=tx.date.isoformat() if tx.date else None,
+                    meta={
+                        "account_id": str(tx.account_id),
+                        "category_id": str(tx.category_id) if tx.category_id else None,
+                        "tx_type": tx.type,
+                    },
+                )
+            )
 
     # -- Accounts -----------------------------------------------------------
-    acc_result = await session.execute(
-        select(Account)
-        .where(
-            Account.workspace_id == workspace_id,
-            Account.name.ilike(pattern, escape="\\"),
-        )
-        .order_by(Account.is_closed.asc(), Account.name.asc())
-        .limit(per_type_limit)
-    )
-    for acc in acc_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="account",
-                id=str(acc.id),
-                label=acc.name,
-                subtitle=acc.type,
-                amount=acc.balance,
-                currency=acc.currency,
-                meta={"is_closed": acc.is_closed},
+    if _wants("account"):
+        acc_result = await session.execute(
+            select(Account)
+            .where(
+                Account.workspace_id == workspace_id,
+                Account.name.ilike(pattern, escape="\\"),
             )
+            .order_by(Account.is_closed.asc(), Account.name.asc())
+            .limit(per_type_limit)
         )
+        for acc in acc_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="account",
+                    id=str(acc.id),
+                    label=acc.name,
+                    subtitle=acc.type,
+                    amount=acc.balance,
+                    currency=acc.currency,
+                    meta={"is_closed": acc.is_closed},
+                )
+            )
 
     # -- Payees -------------------------------------------------------------
-    payee_result = await session.execute(
-        select(Payee)
-        .where(
-            Payee.workspace_id == workspace_id,
-            or_(
-                Payee.name.ilike(pattern, escape="\\"),
-                Payee.notes.ilike(pattern, escape="\\"),
-            ),
-        )
-        .order_by(Payee.is_favorite.desc(), Payee.name.asc())
-        .limit(per_type_limit)
-    )
-    for payee in payee_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="payee",
-                id=str(payee.id),
-                label=payee.name,
-                subtitle=payee.type,
-                meta={"is_favorite": payee.is_favorite},
+    if _wants("payee"):
+        payee_result = await session.execute(
+            select(Payee)
+            .where(
+                Payee.workspace_id == workspace_id,
+                or_(
+                    Payee.name.ilike(pattern, escape="\\"),
+                    Payee.notes.ilike(pattern, escape="\\"),
+                ),
             )
+            .order_by(Payee.is_favorite.desc(), Payee.name.asc())
+            .limit(per_type_limit)
         )
+        for payee in payee_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="payee",
+                    id=str(payee.id),
+                    label=payee.name,
+                    subtitle=payee.type,
+                    meta={"is_favorite": payee.is_favorite},
+                )
+            )
 
     # -- Categories ---------------------------------------------------------
-    cat_result = await session.execute(
-        select(Category)
-        .where(
-            Category.workspace_id == workspace_id,
-            Category.name.ilike(pattern, escape="\\"),
-        )
-        .order_by(Category.name.asc())
-        .limit(per_type_limit)
-    )
-    for cat in cat_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="category",
-                id=str(cat.id),
-                label=cat.name,
-                icon=cat.icon,
-                color=cat.color,
+    if _wants("category"):
+        cat_result = await session.execute(
+            select(Category)
+            .where(
+                Category.workspace_id == workspace_id,
+                Category.name.ilike(pattern, escape="\\"),
             )
+            .order_by(Category.name.asc())
+            .limit(per_type_limit)
         )
+        for cat in cat_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="category",
+                    id=str(cat.id),
+                    label=cat.name,
+                    icon=cat.icon,
+                    color=cat.color,
+                )
+            )
 
     # -- Goals --------------------------------------------------------------
-    goal_result = await session.execute(
-        select(Goal)
-        .where(
-            Goal.workspace_id == workspace_id,
-            Goal.name.ilike(pattern, escape="\\"),
-        )
-        .order_by(Goal.position.asc(), Goal.name.asc())
-        .limit(per_type_limit)
-    )
-    for goal in goal_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="goal",
-                id=str(goal.id),
-                label=goal.name,
-                subtitle=goal.status,
-                amount=goal.target_amount,
-                currency=goal.currency,
-                icon=goal.icon,
-                color=goal.color,
+    if _wants("goal"):
+        goal_result = await session.execute(
+            select(Goal)
+            .where(
+                Goal.workspace_id == workspace_id,
+                Goal.name.ilike(pattern, escape="\\"),
             )
+            .order_by(Goal.position.asc(), Goal.name.asc())
+            .limit(per_type_limit)
         )
+        for goal in goal_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="goal",
+                    id=str(goal.id),
+                    label=goal.name,
+                    subtitle=goal.status,
+                    amount=goal.target_amount,
+                    currency=goal.currency,
+                    icon=goal.icon,
+                    color=goal.color,
+                )
+            )
 
     # -- Assets -------------------------------------------------------------
-    asset_result = await session.execute(
-        select(Asset)
-        .where(
-            Asset.workspace_id == workspace_id,
-            Asset.name.ilike(pattern, escape="\\"),
-        )
-        .order_by(Asset.is_archived.asc(), Asset.position.asc(), Asset.name.asc())
-        .limit(per_type_limit)
-    )
-    for asset in asset_result.scalars().all():
-        hits.append(
-            SearchHit(
-                type="asset",
-                id=str(asset.id),
-                label=asset.name,
-                subtitle=asset.type,
-                currency=asset.currency,
-                meta={"is_archived": asset.is_archived},
+    if _wants("asset"):
+        asset_result = await session.execute(
+            select(Asset)
+            .where(
+                Asset.workspace_id == workspace_id,
+                Asset.name.ilike(pattern, escape="\\"),
             )
+            .order_by(Asset.is_archived.asc(), Asset.position.asc(), Asset.name.asc())
+            .limit(per_type_limit)
         )
+        for asset in asset_result.scalars().all():
+            hits.append(
+                SearchHit(
+                    type="asset",
+                    id=str(asset.id),
+                    label=asset.name,
+                    subtitle=asset.type,
+                    currency=asset.currency,
+                    meta={"is_archived": asset.is_archived},
+                )
+            )
 
     return [hit.to_dict() for hit in hits]

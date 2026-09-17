@@ -9,7 +9,7 @@ from app.models.group import GroupMember
 from app.services import transaction_service
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import num, parse_date, parse_uuid, parse_uuid_list, resolve_workspace_id
+from mcp_server.tools._helpers import num, parse_date, parse_uuid, parse_uuid_list, resolve_workspace_id_gated
 
 
 @tool(
@@ -122,7 +122,7 @@ async def list_transactions(
     # Hard cap regardless of what the LLM asks — the schema says 50 but
     # not every provider enforces additionalProperties / maximum.
     limit = max(1, min(int(limit), 50))
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "transactions")
     txs, total, _ = await transaction_service.get_transactions(
         session,
         ws_id,

@@ -53,7 +53,7 @@ from mcp_server.tools._helpers import (
     parse_date,
     parse_uuid,
     parse_uuid_list,
-    resolve_workspace_id,
+    resolve_workspace_id_gated,
 )
 
 
@@ -124,7 +124,7 @@ async def propose_categorize(
     category_id: str,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "transactions")
     cat_id = parse_uuid(category_id)
     cat = (
         await session.execute(
@@ -210,7 +210,7 @@ async def propose_create_category(
     color: str | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "categories")
     existing = (
         await session.execute(
             select(Category.id, Category.name).where(
@@ -289,7 +289,7 @@ async def propose_create_budget(
     is_recurring: bool = False,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "budgets")
     cat_id = parse_uuid(category_id)
     target_month = (parse_date(month) or date.today()).replace(day=1)
 
@@ -423,7 +423,7 @@ async def propose_create_transaction(
     splits: dict[str, Any] | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "transactions")
     acc_id = parse_uuid(account_id)
     acc = (
         await session.execute(
@@ -660,7 +660,7 @@ async def propose_create_recurring_transaction(
 ) -> dict[str, Any]:
     if frequency in ("monthly", "quarterly") and not day_of_month:
         return {"error": "day_of_month is required for monthly or quarterly frequency"}
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "recurring")
     acc = (
         await session.execute(
             select(Account).where(
@@ -777,7 +777,7 @@ async def propose_update_recurring_transaction(
     is_active: bool | None = None,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "recurring")
     rid = parse_uuid(recurring_id)
     rt = (
         await session.execute(
@@ -899,7 +899,7 @@ async def propose_cancel_recurring_transaction(
     mode: str = "deactivate",
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "recurring")
     rt = (
         await session.execute(
             select(RecurringTransaction).where(
@@ -1009,7 +1009,7 @@ async def propose_create_goal(
     }
 
     if _can_apply(ctx, apply):
-        ws_id = await resolve_workspace_id(session, ctx)
+        ws_id = await resolve_workspace_id_gated(session, ctx, "goals")
         created = await goal_service.create_goal(
             session,
             ws_id,
@@ -1066,7 +1066,7 @@ async def propose_create_payee_rule(
     category_id: str,
     apply: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "rules")
     cat_id = parse_uuid(category_id)
     cat = (
         await session.execute(

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services import account_service
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import num, parse_date, parse_uuid, resolve_workspace_id
+from mcp_server.tools._helpers import num, parse_date, parse_uuid, resolve_workspace_id_gated
 
 
 @tool(
@@ -31,7 +31,7 @@ async def list_accounts(
     ctx: CallContext,
     include_closed: bool = False,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "accounts")
     rows = await account_service.get_accounts(session, ws_id, include_closed=include_closed)
     # rows is already a list of dicts (per service contract), but normalize keys.
     items: list[dict[str, Any]] = []
@@ -75,7 +75,7 @@ async def get_account_summary(
     from_date: str | None = None,
     to_date: str | None = None,
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "accounts")
     account_uuid = parse_uuid(account_id)
     if account_uuid is None:
         return dict(error="account not found")

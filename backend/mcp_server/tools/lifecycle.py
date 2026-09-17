@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services import asset_service, budget_service, goal_service, recurring_transaction_service
 from mcp_server.auth import CallContext
 from mcp_server.registry import tool
-from mcp_server.tools._helpers import num, parse_date, resolve_workspace_id
+from mcp_server.tools._helpers import num, parse_date, resolve_workspace_id_gated
 
 
 @tool(
@@ -31,7 +31,7 @@ from mcp_server.tools._helpers import num, parse_date, resolve_workspace_id
 async def list_recurring_transactions(
     *, session: AsyncSession, ctx: CallContext
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "recurring")
     rows = await recurring_transaction_service.get_recurring_transactions(session, ws_id)
     items = [
         {
@@ -74,7 +74,7 @@ async def list_recurring_transactions(
 async def list_assets(
     *, session: AsyncSession, ctx: CallContext, include_archived: bool = False
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "assets")
     rows = await asset_service.get_assets(session, ws_id, include_archived=include_archived)
     items: list[dict[str, Any]] = []
     for r in rows:
@@ -113,7 +113,7 @@ async def list_assets(
 async def list_goals(
     *, session: AsyncSession, ctx: CallContext, status: str | None = None
 ) -> dict[str, Any]:
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "goals")
     rows = await goal_service.get_goals(session, ws_id, ctx.user_id, status=status)
     items: list[dict[str, Any]] = []
     for r in rows:
@@ -151,7 +151,7 @@ async def list_budgets(
     *, session: AsyncSession, ctx: CallContext, month: str | None = None
 ) -> dict[str, Any]:
     target = parse_date(month)
-    ws_id = await resolve_workspace_id(session, ctx)
+    ws_id = await resolve_workspace_id_gated(session, ctx, "budgets")
     rows = await budget_service.get_budgets(session, ws_id, month=target)
     items = [
         {

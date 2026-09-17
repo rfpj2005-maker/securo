@@ -14,7 +14,7 @@ CREDENTIALS_DIRECTORY: list[Path] = [
 
 class Settings(BaseSettings):
     # App
-    app_name: str = "Securo"
+    app_name: str = "Bússola"
     debug: bool = False
 
     # Database
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
 
     # WebAuthn / passkeys
-    webauthn_rp_name: str = "Securo"
+    webauthn_rp_name: str = "Bússola"
     # Empty means the RP ID follows the domain the browser is on, which is what
     # most deployments want. Set it to pin passkeys to one domain (e.g.
     # securo.example.com); requests from other origins are then rejected.
@@ -167,6 +167,25 @@ class Settings(BaseSettings):
     meetings_whisper_device: str = "cpu"
     meetings_whisper_compute_type: str = "int8"
     meetings_whisper_model_path: str = "./data/whisper_models"
+
+    # Transactional email (currently password-reset links + the "your
+    # password changed" confirmation — see UserManager.on_after_forgot_password
+    # / on_after_reset_password in app/core/auth.py, sent via
+    # app/services/mailer.py). Distinct from the per-user Gmail/IMAP
+    # connections (app/services/email_imap_service.py) — those are a *user's
+    # own* mailbox the agent reads/sends from; this is the app itself
+    # sending system email, so it needs its own relay credentials (2026-09-17:
+    # Amparar uses a dedicated Hostinger mailbox for this — smtp.hostinger.com,
+    # port 465). Left blank means "not configured" — the reset endpoint still
+    # works (the token is generated either way), it just has nowhere to
+    # deliver the link, which on_after_forgot_password logs instead of
+    # silently swallowing.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""  # falls back to smtp_user when blank
+    smtp_use_tls: bool = True
 
     # The CWD-relative ".env" is kept for backward compatibility; the anchored
     # backend/.env guarantees the API and the Celery worker/beat resolve the

@@ -1,7 +1,7 @@
 {
-  "name": "Securo",
-  "short_name": "Securo",
-  "description": "Gerenciador financeiro pessoal — Securo",
+  "name": "Bússola",
+  "short_name": "Bússola",
+  "description": "Gerenciador financeiro pessoal — Bússola",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

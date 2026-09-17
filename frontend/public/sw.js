@@ -11,7 +11,7 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'Securo', body: '', url: '/tasks' }
+  let payload = { title: 'Bússola', body: '', url: '/tasks' }
   try {
     if (event.data) payload = { ...payload, ...event.data.json() }
   } catch {

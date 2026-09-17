@@ -63,7 +63,7 @@ async def send_test(
 ):
     try:
         sent = await push_service.notify_user(
-            session, user.id, title="Securo", body="Notificações estão funcionando neste aparelho."
+            session, user.id, title="Bússola", body="Notificações estão funcionando neste aparelho."
         )
     except push_service.PushNotConfigured as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

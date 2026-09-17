@@ -111,13 +111,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # not a person, calls this. It verifies the payload against our own
     # connection records (provider + external_id) before doing anything.
     ("POST", "/api/webhooks/pluggy"): "unauthenticated by definition, called by Pluggy itself",
-    # Watch pairing: same family as /login and 2fa/verify above — a
-    # headless-device auth handshake, not workspace data. Listed
-    # unprefixed like /login and /2fa/* above — this router is reached
-    # through the same lazy-include wrapper that keeps route.path
-    # relative to the sub-router for this whole family.
-    ("POST", "/watch-pair/start"): "a short-lived pairing code for the requester's own account",
-    ("POST", "/watch-pair/redeem"): "unauthenticated: exchanges a one-time code for a session, same family as /login",
 }
 
 

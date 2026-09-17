@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Required android.service.wallpaper meta-data resource for any
-     WallpaperService, including watch faces — content stays empty, the
-     actual rendering lives in SecuroWatchFaceService/Renderer. -->
-<wallpaper xmlns:android="http://schemas.android.com/apk/res/android" />

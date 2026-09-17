@@ -23,13 +23,30 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
-import { Trash2, Pencil, Mic, Plus, ListChecks, Bell, BellOff, BellRing } from 'lucide-react'
+import { Trash2, Pencil, Mic, Plus, ListChecks, Bell, BellOff, BellRing, ChevronDown, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '@/contexts/workspace-context'
 import type { Task } from '@/types'
 
 const DEFAULT_CATEGORIES = ['marketing', 'management', 'commercial', 'administrative']
-type SortBy = 'name' | 'category' | 'dueDate'
+type SortBy = 'name' | 'category' | 'dueDate' | 'createdAsc'
+
+function compareTasks(a: Task, b: Task, sortBy: SortBy, categoryLabel: (c: string) => string): number {
+  if (sortBy === 'name') {
+    return a.title.localeCompare(b.title)
+  }
+  if (sortBy === 'category') {
+    return categoryLabel(a.category).localeCompare(categoryLabel(b.category)) || a.title.localeCompare(b.title)
+  }
+  if (sortBy === 'createdAsc') {
+    return a.created_at.localeCompare(b.created_at)
+  }
+  // dueDate: soonest first, tasks with no due date sort last.
+  if (!a.due_date && !b.due_date) return 0
+  if (!a.due_date) return 1
+  if (!b.due_date) return -1
+  return a.due_date.localeCompare(b.due_date)
+}
 
 export default function TasksPage() {
   const { t } = useTranslation()
@@ -51,16 +68,24 @@ export default function TasksPage() {
 
   const [filterCategory, setFilterCategory] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('dueDate')
+  const [completedOpen, setCompletedOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null)
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('')
 
   const [formTitle, setFormTitle] = useState('')
   const [formCategory, setFormCategory] = useState('administrative')
   const [formDueDate, setFormDueDate] = useState('')
   const [formDueTime, setFormDueTime] = useState('')
+  const [formNotes, setFormNotes] = useState('')
+  // 'existing' shows a <select> of known categories (plus "+ new"); 'new'
+  // swaps it for a plain text input so a first-time category isn't stuck
+  // behind a datalist that's easy to miss on some browsers/mobile.
+  const [categoryMode, setCategoryMode] = useState<'existing' | 'new'>('existing')
 
   const { data: allTasks, isLoading } = useQuery({
     queryKey: ['tasks'],
@@ -75,22 +100,16 @@ export default function TasksPage() {
     return Array.from(set)
   }, [allTasks])
 
-  const list = useMemo(() => {
+  // Completed tasks move out of the main list into their own collapsed
+  // section (closed by default) — the main page is meant to show what's
+  // still open, not a mix of done-and-not-done.
+  const { pendingList, completedList } = useMemo(() => {
     const filtered = (allTasks ?? []).filter((task) => !filterCategory || task.category === filterCategory)
-    const sorted = [...filtered]
-    if (sortBy === 'name') {
-      sorted.sort((a, b) => a.title.localeCompare(b.title))
-    } else if (sortBy === 'category') {
-      sorted.sort((a, b) => categoryLabel(a.category).localeCompare(categoryLabel(b.category)) || a.title.localeCompare(b.title))
-    } else {
-      sorted.sort((a, b) => {
-        if (!a.due_date && !b.due_date) return 0
-        if (!a.due_date) return 1
-        if (!b.due_date) return -1
-        return a.due_date.localeCompare(b.due_date)
-      })
-    }
-    return sorted
+    const pending = filtered.filter((t) => t.status !== 'completed')
+    const completed = filtered.filter((t) => t.status === 'completed')
+    pending.sort((a, b) => compareTasks(a, b, sortBy, categoryLabel))
+    completed.sort((a, b) => compareTasks(a, b, sortBy, categoryLabel))
+    return { pendingList: pending, completedList: completed }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTasks, filterCategory, sortBy])
 
@@ -99,7 +118,7 @@ export default function TasksPage() {
   const liveEditingTask = editingTask ? (allTasks ?? []).find((t) => t.id === editingTask.id) ?? editingTask : null
 
   const createMutation = useMutation({
-    mutationFn: (data: { title: string; category: string; due_date?: string | null; due_time?: string | null }) => tasksApi.create(data),
+    mutationFn: (data: { title: string; category: string; due_date?: string | null; due_time?: string | null; notes?: string | null }) => tasksApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setDialogOpen(false)
@@ -154,6 +173,16 @@ export default function TasksPage() {
     },
   })
 
+  const renameSubtaskMutation = useMutation({
+    mutationFn: ({ taskId, subtaskId, title }: { taskId: string; subtaskId: string; title: string }) =>
+      tasksApi.subtasks.update(taskId, subtaskId, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      setEditingSubtaskId(null)
+    },
+    onError: () => toast.error(t('common.error')),
+  })
+
   const deleteSubtaskMutation = useMutation({
     mutationFn: ({ taskId, subtaskId }: { taskId: string; subtaskId: string }) => tasksApi.subtasks.delete(taskId, subtaskId),
     onSuccess: () => {
@@ -167,7 +196,10 @@ export default function TasksPage() {
     setFormCategory('administrative')
     setFormDueDate('')
     setFormDueTime('')
+    setFormNotes('')
+    setCategoryMode('existing')
     setNewSubtaskTitle('')
+    setEditingSubtaskId(null)
     setDialogOpen(true)
   }
 
@@ -177,7 +209,10 @@ export default function TasksPage() {
     setFormCategory(task.category)
     setFormDueDate(task.due_date ?? '')
     setFormDueTime(task.due_time ? task.due_time.slice(0, 5) : '')
+    setFormNotes(task.notes ?? '')
+    setCategoryMode('existing')
     setNewSubtaskTitle('')
+    setEditingSubtaskId(null)
     setDialogOpen(true)
   }
 
@@ -190,6 +225,7 @@ export default function TasksPage() {
         category,
         due_date: formDueDate || null,
         due_time: formDueDate ? formDueTime || null : null,
+        notes: formNotes.trim() || null,
       })
     } else {
       createMutation.mutate({
@@ -197,12 +233,77 @@ export default function TasksPage() {
         category,
         due_date: formDueDate || null,
         due_time: formDueDate ? formDueTime || null : null,
+        notes: formNotes.trim() || null,
       })
     }
   }
 
   const formatDueDate = (dueDate: string | null) =>
     dueDate ? new Date(dueDate + 'T00:00:00').toLocaleDateString(dateLocale) : t('tasks.noDueDate')
+
+  // Shared row renderer — used for both the open-tasks table and the
+  // collapsed "completed" section below it, so toggling a task's status
+  // (in either place) behaves identically.
+  const renderTaskRow = (task: Task) => {
+    const doneCount = task.subtasks.filter((s) => s.is_done).length
+    return (
+      <TableRow key={task.id} className="border-b border-border last:border-0">
+        <TableCell className="py-2.5 pl-4 pr-0 w-[40px]">
+          <input
+            type="checkbox"
+            checked={task.status === 'completed'}
+            disabled={!canWrite}
+            onChange={() =>
+              toggleStatusMutation.mutate({
+                id: task.id,
+                status: task.status === 'completed' ? 'pending' : 'completed',
+              })
+            }
+            className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+          />
+        </TableCell>
+        <TableCell className="py-2.5 whitespace-normal">
+          <span className={`text-sm font-semibold block ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+            {task.title}
+          </span>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{categoryLabel(task.category)}</span>
+            <span className="text-xs text-muted-foreground">{formatDueDate(task.due_date)}</span>
+            {task.subtasks.length > 0 && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <ListChecks size={12} />
+                {doneCount}/{task.subtasks.length}
+              </span>
+            )}
+          </div>
+        </TableCell>
+        {canWrite && (
+          <TableCell className="py-2.5 pr-4 sm:pr-5 w-[76px]">
+            <div className="flex items-center justify-end gap-1">
+              <button
+                className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors"
+                onClick={() => openEdit(task)}
+                title={t('common.edit')}
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                onClick={() => {
+                  setTaskToDelete(task.id)
+                  setDeleteDialogOpen(true)
+                }}
+                disabled={deleteMutation.isPending}
+                title={t('common.delete')}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          </TableCell>
+        )}
+      </TableRow>
+    )
+  }
 
   return (
     <div>
@@ -243,6 +344,7 @@ export default function TasksPage() {
           <option value="dueDate">{t('tasks.sortByDueDate')}</option>
           <option value="name">{t('tasks.sortByName')}</option>
           <option value="category">{t('tasks.sortByCategory')}</option>
+          <option value="createdAsc">{t('tasks.sortByCreatedAsc')}</option>
         </select>
       </div>
 
@@ -256,67 +358,8 @@ export default function TasksPage() {
         ) : (
           <Table>
             <TableBody>
-              {list.map((task) => {
-                const doneCount = task.subtasks.filter((s) => s.is_done).length
-                return (
-                  <TableRow key={task.id} className="border-b border-border last:border-0">
-                    <TableCell className="py-2.5 pl-4 pr-0 w-[40px]">
-                      <input
-                        type="checkbox"
-                        checked={task.status === 'completed'}
-                        disabled={!canWrite}
-                        onChange={() =>
-                          toggleStatusMutation.mutate({
-                            id: task.id,
-                            status: task.status === 'completed' ? 'pending' : 'completed',
-                          })
-                        }
-                        className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
-                      />
-                    </TableCell>
-                    <TableCell className="py-2.5 whitespace-normal">
-                      <span className={`text-sm font-semibold block ${task.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                        {task.title}
-                      </span>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{categoryLabel(task.category)}</span>
-                        <span className="text-xs text-muted-foreground">{formatDueDate(task.due_date)}</span>
-                        {task.subtasks.length > 0 && (
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <ListChecks size={12} />
-                            {doneCount}/{task.subtasks.length}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    {canWrite && (
-                      <TableCell className="py-2.5 pr-4 sm:pr-5 w-[76px]">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors"
-                            onClick={() => openEdit(task)}
-                            title={t('common.edit')}
-                          >
-                            <Pencil size={13} />
-                          </button>
-                          <button
-                            className="p-1.5 rounded-md text-muted-foreground hover:text-rose-500 hover:bg-rose-50 transition-colors"
-                            onClick={() => {
-                              setTaskToDelete(task.id)
-                              setDeleteDialogOpen(true)
-                            }}
-                            disabled={deleteMutation.isPending}
-                            title={t('common.delete')}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                )
-              })}
-              {list.length === 0 && (
+              {pendingList.map((task) => renderTaskRow(task))}
+              {pendingList.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={canWrite ? 3 : 2} className="text-center py-16 text-muted-foreground">
                     {t('tasks.empty')}
@@ -327,6 +370,26 @@ export default function TasksPage() {
           </Table>
         )}
       </div>
+
+      {/* Completed items — collapsed by default so they don't clutter the
+          main list; toggled open on demand. */}
+      {!isLoading && completedList.length > 0 && (
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden mb-4">
+          <button
+            type="button"
+            onClick={() => setCompletedOpen((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {completedOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            {t('tasks.completedSection')} ({completedList.length})
+          </button>
+          {completedOpen && (
+            <Table>
+              <TableBody>{completedList.map((task) => renderTaskRow(task))}</TableBody>
+            </Table>
+          )}
+        </div>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -341,17 +404,44 @@ export default function TasksPage() {
             </div>
             <div className="space-y-2">
               <Label>{t('tasks.category')}</Label>
-              <Input
-                list="task-categories"
-                value={formCategory}
-                onChange={(e) => setFormCategory(e.target.value)}
-                placeholder={t('tasks.categoryPlaceholder')}
-              />
-              <datalist id="task-categories">
-                {availableCategories.map((c) => (
-                  <option key={c} value={c}>{categoryLabel(c)}</option>
-                ))}
-              </datalist>
+              {categoryMode === 'existing' ? (
+                <select
+                  className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus-visible:ring-ring/30 focus-visible:ring-[2px]"
+                  value={formCategory}
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') {
+                      setCategoryMode('new')
+                      setFormCategory('')
+                    } else {
+                      setFormCategory(e.target.value)
+                    }
+                  }}
+                >
+                  {availableCategories.map((c) => (
+                    <option key={c} value={c}>{categoryLabel(c)}</option>
+                  ))}
+                  <option value="__new__">{t('tasks.newCategory')}</option>
+                </select>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    autoFocus
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    placeholder={t('tasks.categoryPlaceholder')}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setCategoryMode('existing')
+                      setFormCategory(availableCategories[0] ?? 'administrative')
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">{t('tasks.categoryHint')}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -379,32 +469,86 @@ export default function TasksPage() {
               ) : (
                 <>
                   <div className="space-y-1">
-                    {liveEditingTask.subtasks.map((sub) => (
-                      <div key={sub.id} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={sub.is_done}
-                          onChange={() =>
-                            toggleSubtaskMutation.mutate({
-                              taskId: liveEditingTask.id,
-                              subtaskId: sub.id,
-                              is_done: !sub.is_done,
-                            })
-                          }
-                          className="h-4 w-4 rounded border-border accent-primary cursor-pointer shrink-0"
-                        />
-                        <span className={`text-sm flex-1 ${sub.is_done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                          {sub.title}
-                        </span>
-                        <button
-                          className="p-1 rounded text-muted-foreground hover:text-rose-500 shrink-0"
-                          onClick={() => deleteSubtaskMutation.mutate({ taskId: liveEditingTask.id, subtaskId: sub.id })}
-                          title={t('common.delete')}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
+                    {liveEditingTask.subtasks.map((sub) =>
+                      editingSubtaskId === sub.id ? (
+                        <div key={sub.id} className="flex items-center gap-2">
+                          <Input
+                            autoFocus
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && editingSubtaskTitle.trim()) {
+                                e.preventDefault()
+                                renameSubtaskMutation.mutate({
+                                  taskId: liveEditingTask.id,
+                                  subtaskId: sub.id,
+                                  title: editingSubtaskTitle.trim(),
+                                })
+                              } else if (e.key === 'Escape') {
+                                setEditingSubtaskId(null)
+                              }
+                            }}
+                            className="flex-1"
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            disabled={!editingSubtaskTitle.trim() || renameSubtaskMutation.isPending}
+                            onClick={() =>
+                              renameSubtaskMutation.mutate({
+                                taskId: liveEditingTask.id,
+                                subtaskId: sub.id,
+                                title: editingSubtaskTitle.trim(),
+                              })
+                            }
+                          >
+                            <Pencil size={12} />
+                          </Button>
+                          <button
+                            className="p-1 rounded text-muted-foreground hover:text-foreground shrink-0"
+                            onClick={() => setEditingSubtaskId(null)}
+                            title={t('common.cancel')}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <div key={sub.id} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={sub.is_done}
+                            onChange={() =>
+                              toggleSubtaskMutation.mutate({
+                                taskId: liveEditingTask.id,
+                                subtaskId: sub.id,
+                                is_done: !sub.is_done,
+                              })
+                            }
+                            className="h-4 w-4 rounded border-border accent-primary cursor-pointer shrink-0"
+                          />
+                          <span className={`text-sm flex-1 ${sub.is_done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+                            {sub.title}
+                          </span>
+                          <button
+                            className="p-1 rounded text-muted-foreground hover:text-primary shrink-0"
+                            onClick={() => {
+                              setEditingSubtaskId(sub.id)
+                              setEditingSubtaskTitle(sub.title)
+                            }}
+                            title={t('common.edit')}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            className="p-1 rounded text-muted-foreground hover:text-rose-500 shrink-0"
+                            onClick={() => deleteSubtaskMutation.mutate({ taskId: liveEditingTask.id, subtaskId: sub.id })}
+                            title={t('common.delete')}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ),
+                    )}
                     {liveEditingTask.subtasks.length === 0 && (
                       <p className="text-xs text-muted-foreground">{t('tasks.noSubtasks')}</p>
                     )}
@@ -432,6 +576,17 @@ export default function TasksPage() {
                   </div>
                 </>
               )}
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-border">
+              <Label>{t('tasks.notes')}</Label>
+              <textarea
+                className="w-full border border-input rounded-md px-3 py-2 text-sm bg-card resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                rows={3}
+                value={formNotes}
+                onChange={(e) => setFormNotes(e.target.value)}
+                placeholder={t('tasks.notesPlaceholder')}
+              />
             </div>
           </div>
           <DialogFooter className={editingTask ? 'flex justify-between sm:justify-between' : ''}>

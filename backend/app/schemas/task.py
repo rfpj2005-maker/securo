@@ -15,6 +15,7 @@ class TaskCreate(BaseModel):
     due_date: Optional[_Date] = None
     due_time: Optional[_Time] = None
     status: str = "pending"
+    notes: Optional[str] = None
 
     @field_validator("category")
     @classmethod
@@ -38,6 +39,7 @@ class TaskUpdate(BaseModel):
     due_date: Optional[_Date] = None
     due_time: Optional[_Time] = None
     status: Optional[str] = None
+    notes: Optional[str] = None
 
     @field_validator("category")
     @classmethod
@@ -65,6 +67,7 @@ class TaskRead(BaseModel):
     due_date: Optional[_Date] = None
     due_time: Optional[_Time] = None
     status: str
+    notes: Optional[str] = None
     source_meeting_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime

@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Time
+from sqlalchemy import Date, DateTime, ForeignKey, String, Text, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -30,6 +30,9 @@ class Task(Base):
     # without a due_date.
     due_time: Mapped[Optional[time]] = mapped_column(Time, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, completed
+    # Free-text notes/observações — optional context that doesn't fit in
+    # the title (a contact, a link, extra instructions).
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Set once the due-date push reminder has fired, so the periodic
     # reminder job never notifies the same task twice. Cleared automatically
     # whenever due_date/due_time changes (see task_service.update_task).

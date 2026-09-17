@@ -52,6 +52,7 @@ from app.api.workspaces import router as workspaces_router
 from app.api.admin import router as admin_router, check_registration_enabled
 from app.core.auth import fastapi_users
 from app.core.config import get_settings
+from app.core.workspace_context import require_module
 from app.core.rate_limit import login_rate_limit, register_rate_limit, password_reset_rate_limit
 from app.core.redis import close_redis
 from app.schemas.user import UserCreate, UserRead, UserUpdate
@@ -189,32 +190,36 @@ app.include_router(
     tags=["users"],
 )
 
-# Domain routes
-app.include_router(categories_router)
-app.include_router(category_groups_router)
-app.include_router(rules_router)
-app.include_router(transactions_router)
-app.include_router(import_router)
-app.include_router(import_logs_router)
-app.include_router(accounts_router)
-app.include_router(connections_router)
-app.include_router(recurring_router)
-app.include_router(budgets_router)
-app.include_router(goals_router)
-app.include_router(groups_router)
-app.include_router(assets_router)
-app.include_router(asset_groups_router)
+# Domain routes. Most are gated by `require_module` — a member whose
+# owner hid a module (WorkspaceMemberHiddenModule) gets a 403 from the
+# API itself now, not just a hidden nav link (see require_module's
+# docstring in workspace_context.py for why this exists: it didn't,
+# until 2026-09-17, for any module — hiding one only ever hid UI).
+app.include_router(categories_router, dependencies=[Depends(require_module("categories"))])
+app.include_router(category_groups_router, dependencies=[Depends(require_module("categories"))])
+app.include_router(rules_router, dependencies=[Depends(require_module("rules"))])
+app.include_router(transactions_router, dependencies=[Depends(require_module("transactions"))])
+app.include_router(import_router, dependencies=[Depends(require_module("import"))])
+app.include_router(import_logs_router, dependencies=[Depends(require_module("import"))])
+app.include_router(accounts_router, dependencies=[Depends(require_module("accounts"))])
+app.include_router(connections_router, dependencies=[Depends(require_module("accounts"))])
+app.include_router(recurring_router, dependencies=[Depends(require_module("recurring"))])
+app.include_router(budgets_router, dependencies=[Depends(require_module("budgets"))])
+app.include_router(goals_router, dependencies=[Depends(require_module("goals"))])
+app.include_router(groups_router, dependencies=[Depends(require_module("split_groups"))])
+app.include_router(assets_router, dependencies=[Depends(require_module("assets"))])
+app.include_router(asset_groups_router, dependencies=[Depends(require_module("assets"))])
 app.include_router(collections_router)
-app.include_router(dashboard_router)
-app.include_router(reports_router)
+app.include_router(dashboard_router, dependencies=[Depends(require_module("transactions"))])
+app.include_router(reports_router, dependencies=[Depends(require_module("reports"))])
 app.include_router(search_router)
 app.include_router(setup_router)
 app.include_router(currencies_router)
 app.include_router(fx_rates_router)
-app.include_router(export_router)
-app.include_router(attachments_router)
+app.include_router(export_router, dependencies=[Depends(require_module("transactions"))])
+app.include_router(attachments_router, dependencies=[Depends(require_module("transactions"))])
 app.include_router(fiscal_router)
-app.include_router(payees_router)
+app.include_router(payees_router, dependencies=[Depends(require_module("payees"))])
 app.include_router(tasks_router)
 app.include_router(subtasks_router)
 app.include_router(google_calendar_router)

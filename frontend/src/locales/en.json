@@ -259,6 +259,8 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "noAccessTitle": "No access to Finances",
+    "noAccessDescription": "This workspace's owner hasn't enabled the Finances module for your account.",
     "suggestions": {
       "title": "Financial control suggestions",
       "expensesOverIncomeTitle": "Expenses higher than income this month",

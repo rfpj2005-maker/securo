@@ -111,6 +111,42 @@ async def current_writable_workspace(
     return ctx
 
 
+# Blocks a request with 403 when `module_id` is hidden for the current
+# member (WorkspaceMemberHiddenModule) — real enforcement, unlike
+# module_service.py's own resolver ("not a permission system ... there is
+# no API-level enforcement, by design"). That design is fine for the
+# upstream personal-finance case it targets (every workspace member
+# equally trusted), but wrong for a business workspace with sócios who
+# aren't supposed to see the company's full financials just by being a
+# member — the owner's per-member "hide this module" toggle has to
+# actually hide the data, not just the nav link. Added 2026-09-17 after a
+# hidden `transactions` module still left an editor able to see full
+# company transactions through the Dashboard, which never checked
+# hasModule at all: hiding a module was UI-only everywhere in the app,
+# trivially bypassed by any page that forgot the frontend check (as the
+# Dashboard did) or by calling the API directly (as every page could).
+# Owners and managers are never restricted, same as every other place
+# hidden_modules is enforced — see the WorkspaceMemberHiddenModule
+# docstring.
+def require_module(module_id: str):
+    async def _dep(
+        ctx: WorkspaceContext = Depends(current_workspace),
+        session: AsyncSession = Depends(get_async_session),
+    ) -> WorkspaceContext:
+        if ctx.is_owner:
+            return ctx
+        from app.services.workspace_service import get_hidden_module_ids
+
+        hidden = await get_hidden_module_ids(session, ctx.member.id)
+        if module_id in hidden:
+            raise HTTPException(
+                status_code=403, detail=f"Module '{module_id}' is hidden for this member"
+            )
+        return ctx
+
+    return _dep
+
+
 # Gate for company infrastructure that isn't workspace data (cameras,
 # PABX) but also isn't meant for every registered user of the install —
 # only people who actually belong to a business workspace. Deliberately

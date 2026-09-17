@@ -259,6 +259,8 @@
   },
   "dashboard": {
     "title": "Painel",
+    "noAccessTitle": "Sem acesso ao financeiro",
+    "noAccessDescription": "O dono deste workspace não liberou o módulo Financeiro pra sua conta.",
     "suggestions": {
       "title": "Sugestões de controle financeiro",
       "expensesOverIncomeTitle": "Gastos maiores que a renda este mês",

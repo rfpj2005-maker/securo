@@ -50,6 +50,7 @@ import { RuleDialog, type RuleDialogInitialData } from '@/components/rule-dialog
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useAuth } from '@/contexts/auth-context'
+import { useWorkspace } from '@/contexts/workspace-context'
 import { useCollectionFilter } from '@/contexts/collection-filter-context'
 import { resolveDateFnsLocale } from '@/lib/date-fns-locale'
 import type { Rule, Transaction, Account } from '@/types'
@@ -145,6 +146,7 @@ export default function DashboardPage() {
   const { mask, privacyMode, MASK } = usePrivacyMode()
   const isMobile = useIsMobile()
   const { user } = useAuth()
+  const { hasModule, isLoading: workspaceLoading } = useWorkspace()
   const userCurrency = user?.preferences?.currency_display ?? 'USD'
   const displayName = user?.preferences?.display_name || ''
   const locale = useDisplayLocale()
@@ -733,6 +735,22 @@ export default function DashboardPage() {
   const txTotalPages = Math.ceil(allDisplayRows.length / txPerPage)
   const pagedRows = allDisplayRows.slice((txPage - 1) * txPerPage, txPage * txPerPage)
   const txListLoading = currentTxLoading || projectedTxLoading
+
+  // The Dashboard is the one page every member always lands on — unlike
+  // every other page in the app, it was never wrapped in ModuleRoute, so
+  // a member whose owner hid the `transactions` module (WorkspaceMemberHiddenModule)
+  // still saw full workspace financials here even though the nav link
+  // itself was correctly hidden. The API now backs this up with a real
+  // 403 (require_module in workspace_context.py), but the UI should
+  // never even ask for data this member isn't meant to see.
+  if (!workspaceLoading && !hasModule('transactions')) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-2 px-4">
+        <p className="text-lg font-medium">{t('dashboard.noAccessTitle')}</p>
+        <p className="text-sm text-muted-foreground max-w-sm">{t('dashboard.noAccessDescription')}</p>
+      </div>
+    )
+  }
 
   return (
     <div>

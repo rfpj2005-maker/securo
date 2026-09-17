@@ -1,0 +1,5 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base manifest-level theme; Compose (ui/theme/Theme.kt) owns the real
+         Material3 color scheme once the activity is up. -->
+    <style name="Theme.Bussola" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

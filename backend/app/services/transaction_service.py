@@ -1479,9 +1479,12 @@ async def update_transaction(
     if not transaction:
         return None
 
+    original_description = transaction.description
+
     update_data = data.model_dump(exclude_unset=True)
     apply_to_transfer_pair = update_data.pop("apply_to_transfer_pair", False)
     apply_to = update_data.pop("apply_to", "this")
+    apply_to_all_with_description = update_data.pop("apply_to_all_with_description", False)
 
     # Splits are processed separately after column updates land so the
     # service can validate against the new amount.
@@ -1585,6 +1588,23 @@ async def update_transaction(
     if "amount" in update_data and _is_installment(transaction):
         await session.flush()
         await _resync_installment_series_total(session, workspace_id, transaction)
+
+    # Broad category apply: every other transaction in the workspace that
+    # shared this one's description (as it was before this edit) gets the
+    # same new category. Matched on the pre-edit description so renaming
+    # and recategorizing in the same edit still targets the group the user
+    # actually meant.
+    if apply_to_all_with_description and "category_id" in update_data and original_description:
+        touched_ids = {row.id for row in rows}
+        await session.execute(
+            update(Transaction)
+            .where(
+                Transaction.workspace_id == workspace_id,
+                Transaction.description == original_description,
+                Transaction.id.notin_(touched_ids),
+            )
+            .values(category_id=update_data["category_id"])
+        )
 
     await session.commit()
     await session.refresh(transaction, ["category", "payee_entity", "splits"])

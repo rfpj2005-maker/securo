@@ -116,6 +116,11 @@ class TransactionUpdate(BaseModel):
     # same series; "all" touches every row in the series. Ignored when the
     # transaction has no installment fingerprint.
     apply_to: Literal["this", "future", "all"] = "this"
+    # When a category_id change is also applied to every other transaction
+    # in the workspace sharing this transaction's (pre-edit) description —
+    # same "apply broadly or just this one" prompt as apply_to_transfer_pair,
+    # but keyed on description instead of the transfer pairing.
+    apply_to_all_with_description: bool = False
 
 
 class InstallmentSeriesCreate(BaseModel):

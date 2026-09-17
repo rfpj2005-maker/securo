@@ -65,11 +65,18 @@ import { shouldShowPendingBadge } from '@/lib/transaction-status'
 type TransactionUpdatePayload = TransactionEditPayload & {
   apply_to_transfer_pair?: boolean
   apply_to?: TransactionApplyScope
+  apply_to_all_with_description?: boolean
 }
 
 type PendingTransferCategoryUpdate = {
   id: string
   data: TransactionUpdatePayload
+}
+
+type PendingDescriptionCategoryUpdate = {
+  id: string
+  data: TransactionUpdatePayload
+  description: string
 }
 
 function parseHashtags(notes: string | null): string[] {
@@ -137,6 +144,8 @@ export default function TransactionsPage() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
   const [pendingTransferCategoryUpdate, setPendingTransferCategoryUpdate] =
     useState<PendingTransferCategoryUpdate | null>(null)
+  const [pendingDescriptionCategoryUpdate, setPendingDescriptionCategoryUpdate] =
+    useState<PendingDescriptionCategoryUpdate | null>(null)
   // Manual installment-series scoped delete. Scoped edits are handled by the
   // shared TransactionDialog so account detail and dashboard behave the same.
   const [pendingSeriesDeleteId, setPendingSeriesDeleteId] = useState<string | null>(null)
@@ -846,6 +855,19 @@ export default function TransactionsPage() {
     setPendingTransferCategoryUpdate(null)
   }
 
+  const isDescriptionCategoryPromptOpen = !!pendingDescriptionCategoryUpdate
+
+  const submitPendingDescriptionCategoryUpdate = (applyToAllWithDescription: boolean) => {
+    if (!pendingDescriptionCategoryUpdate) return
+    const { id, data } = pendingDescriptionCategoryUpdate
+    updateMutation.mutate({
+      id,
+      ...data,
+      apply_to_all_with_description: applyToAllWithDescription,
+    })
+    setPendingDescriptionCategoryUpdate(null)
+  }
+
   const handleTransactionSave = (
     data: TransactionSavePayload,
     recurringData?: { frequency: string; end_date?: string },
@@ -858,13 +880,22 @@ export default function TransactionsPage() {
       return
     }
 
-    const isTransferCategoryChange =
-      !!editingTx.transfer_pair_id &&
+    const isCategoryChange =
       Object.prototype.hasOwnProperty.call(data, 'category_id') &&
       data.category_id !== editingTx.category_id
 
+    const isTransferCategoryChange = isCategoryChange && !!editingTx.transfer_pair_id
+
     if (isTransferCategoryChange) {
       setPendingTransferCategoryUpdate({ id: editingTx.id, data })
+      return
+    }
+
+    // Non-transfer category changes: ask whether to also recategorize every
+    // other transaction sharing this one's description, same "just this one
+    // or all of them" shape as the transfer-pair prompt above.
+    if (isCategoryChange) {
+      setPendingDescriptionCategoryUpdate({ id: editingTx.id, data, description: editingTx.description })
       return
     }
 
@@ -1942,6 +1973,7 @@ export default function TransactionsPage() {
           setEditingTx(null)
           setDuplicateDraft(null)
           setPendingTransferCategoryUpdate(null)
+          setPendingDescriptionCategoryUpdate(null)
           // Drop any prior mutation error so reopening the dialog
           // doesn't surface a stale message (issue #155).
           createMutation.reset()
@@ -2017,6 +2049,50 @@ export default function TransactionsPage() {
               {updateMutation.isPending
                 ? t('common.loading')
                 : t('transactions.confirmTransferCategoryBoth')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isDescriptionCategoryPromptOpen}
+        onOpenChange={(open) => {
+          if (!open) setPendingDescriptionCategoryUpdate(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('transactions.confirmDescriptionCategoryTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('transactions.confirmDescriptionCategoryDesc', {
+              description: pendingDescriptionCategoryUpdate?.description ?? '',
+            })}
+          </p>
+          <DialogFooter className="flex-row flex-nowrap items-center justify-end gap-2 sm:space-x-0">
+            <Button
+              className="shrink-0"
+              variant="outline"
+              onClick={() => setPendingDescriptionCategoryUpdate(null)}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              className="min-w-0 flex-1 truncate"
+              variant="outline"
+              onClick={() => submitPendingDescriptionCategoryUpdate(false)}
+              disabled={updateMutation.isPending}
+            >
+              {t('transactions.confirmDescriptionCategorySingle')}
+            </Button>
+            <Button
+              className="min-w-0 flex-1 truncate"
+              onClick={() => submitPendingDescriptionCategoryUpdate(true)}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending
+                ? t('common.loading')
+                : t('transactions.confirmDescriptionCategoryAll')}
             </Button>
           </DialogFooter>
         </DialogContent>

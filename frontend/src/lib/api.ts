@@ -213,6 +213,12 @@ export const auth = {
     const { data } = await api.post('/auth/register', { email, password, preferences })
     return data
   },
+  forgotPassword: async (email: string): Promise<void> => {
+    await api.post('/auth/forgot-password', { email })
+  },
+  resetPassword: async (token: string, password: string): Promise<void> => {
+    await api.post('/auth/reset-password', { token, password })
+  },
   me: async (): Promise<User> => {
     const { data } = await api.get('/users/me')
     return data
@@ -227,14 +233,6 @@ export const auth = {
   },
   setup2fa: async (): Promise<{ secret: string; otpauth_uri: string }> => {
     const { data } = await api.post('/auth/2fa/setup')
-    return data
-  },
-  // Pairing code a headless companion device (currently: the Wear OS
-  // watch app) redeems for its own access token — see backend
-  // app/api/watch_pairing.py. The redeem call is device-side only, not
-  // called from this web app.
-  watchPairStart: async (): Promise<{ code: string; expires_in: number }> => {
-    const { data } = await api.post('/auth/watch-pair/start')
     return data
   },
   enable2fa: async (code: string): Promise<void> => {
@@ -537,6 +535,7 @@ export const transactions = {
     transaction: TransactionEditPayload & {
       apply_to_transfer_pair?: boolean
       apply_to?: TransactionApplyScope
+      apply_to_all_with_description?: boolean
     },
   ): Promise<Transaction> => {
     const { data } = await api.patch(`/transactions/${id}`, transaction)
@@ -1150,11 +1149,11 @@ export const tasks = {
     const { data } = await api.get(`/tasks/${id}`)
     return data
   },
-  create: async (task: { title: string; category?: string; due_date?: string | null; due_time?: string | null; status?: string }): Promise<Task> => {
+  create: async (task: { title: string; category?: string; due_date?: string | null; due_time?: string | null; status?: string; notes?: string | null }): Promise<Task> => {
     const { data } = await api.post('/tasks', task)
     return data
   },
-  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'due_time' | 'status'>>): Promise<Task> => {
+  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'due_time' | 'status' | 'notes'>>): Promise<Task> => {
     const { data } = await api.patch(`/tasks/${id}`, task)
     return data
   },
@@ -1761,6 +1760,14 @@ export const agents = {
   // Throws 404 if the user has no agents at all.
   getDefault: async (): Promise<Agent> => {
     const { data } = await api.get('/agents/default')
+    return data
+  },
+  // The current workspace's Siprov agent, resolved by name server-side —
+  // not a fixed id, since which agent that is depends on which workspace
+  // actually owns one (see backend/app/agents/api/agents.py). Callers
+  // should treat a 404 as "no Siprov agent here" and hide the nav link.
+  getSiprov: async (): Promise<Agent> => {
+    const { data } = await api.get('/agents/siprov')
     return data
   },
   get: async (id: string): Promise<Agent> => {

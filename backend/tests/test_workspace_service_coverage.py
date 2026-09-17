@@ -45,7 +45,7 @@ async def test_get_managed_workspaces(session: AsyncSession, test_user: User):
 
 @pytest.mark.asyncio
 async def test_get_default_workspace_member_first(session: AsyncSession, test_user: User):
-    ws = await workspace_service.get_default_workspace(session, test_user.id)
+    ws = await workspace_service.get_default_workspace(session, test_user)
     assert ws is not None
     assert ws.kind == "personal"
 
@@ -65,7 +65,7 @@ async def test_get_default_workspace_falls_back_to_managed(session: AsyncSession
     session.add(ws)
     await session.commit()
 
-    default = await workspace_service.get_default_workspace(session, manager.id)
+    default = await workspace_service.get_default_workspace(session, manager)
     assert default is not None
     assert default.id == ws.id
 
@@ -74,7 +74,46 @@ async def test_get_default_workspace_falls_back_to_managed(session: AsyncSession
 async def test_get_default_workspace_none(session: AsyncSession):
     stranger = await _make_user(session, "nows@example.com")
     await session.commit()
-    assert await workspace_service.get_default_workspace(session, stranger.id) is None
+    assert await workspace_service.get_default_workspace(session, stranger) is None
+
+
+@pytest.mark.asyncio
+async def test_get_default_workspace_prefers_pinned_preference(session: AsyncSession, test_user: User):
+    """preferences['default_workspace_id'] overrides the oldest-first
+    default — a user who owns multiple workspaces (their own + a business
+    one, say) can pin which one a fresh device/login lands on."""
+    second = await workspace_service.create_workspace(
+        session, name="Second Workspace", creator=test_user, seed_defaults=False
+    )
+    await session.commit()
+
+    # Sanity check: without the preference, the older (auto-created
+    # personal) workspace still wins.
+    default_before = await workspace_service.get_default_workspace(session, test_user)
+    assert default_before is not None
+    assert default_before.id != second.id
+
+    test_user.preferences = {**(test_user.preferences or {}), "default_workspace_id": str(second.id)}
+    await session.commit()
+    await session.refresh(test_user)
+
+    default_after = await workspace_service.get_default_workspace(session, test_user)
+    assert default_after is not None
+    assert default_after.id == second.id
+
+
+@pytest.mark.asyncio
+async def test_get_default_workspace_ignores_stale_pinned_preference(session: AsyncSession, test_user: User):
+    """A pinned id that no longer resolves to an accessible workspace
+    (deleted, or never valid) falls back to oldest-first instead of
+    erroring."""
+    test_user.preferences = {**(test_user.preferences or {}), "default_workspace_id": str(uuid.uuid4())}
+    await session.commit()
+    await session.refresh(test_user)
+
+    default = await workspace_service.get_default_workspace(session, test_user)
+    assert default is not None
+    assert default.kind == "personal"
 
 
 @pytest.mark.asyncio

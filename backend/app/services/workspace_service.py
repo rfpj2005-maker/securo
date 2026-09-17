@@ -135,17 +135,31 @@ async def is_workspace_manager(
     return result.scalar_one_or_none() is not None
 
 
-async def get_default_workspace(session: AsyncSession, user_id: uuid.UUID) -> Optional[Workspace]:
-    """The user's first (oldest) workspace — used when no X-Workspace-Id header is set.
+async def get_default_workspace(session: AsyncSession, user: User) -> Optional[Workspace]:
+    """The workspace to land on when no X-Workspace-Id header is set (a
+    fresh login, a new device, or after clearing local storage — the
+    frontend otherwise remembers the last-active workspace itself, in
+    localStorage, which doesn't follow the user across devices).
 
-    Falls back to a managed workspace if the user has no memberships
-    (e.g. a manager who hasn't been invited to any of the workspaces
-    they administer).
+    Prefers `user.preferences["default_workspace_id"]` when set and still
+    valid (still a member/manager, not archived) — this is what lets a
+    user who owns multiple workspaces (e.g. their own + a business one)
+    pin which one opens first everywhere, not just in one browser. Falls
+    back to the first (oldest) workspace otherwise, and to a managed
+    workspace if the user has no memberships at all (e.g. a manager who
+    hasn't been invited to any of the workspaces they administer).
     """
-    workspaces = await get_user_workspaces(session, user_id)
+    workspaces = await get_user_workspaces(session, user.id)
+    managed = await get_managed_workspaces(session, user.id)
+
+    preferred_id = (user.preferences or {}).get("default_workspace_id")
+    if preferred_id:
+        for ws in (*workspaces, *managed):
+            if str(ws.id) == str(preferred_id):
+                return ws
+
     if workspaces:
         return workspaces[0]
-    managed = await get_managed_workspaces(session, user_id)
     return managed[0] if managed else None
 
 

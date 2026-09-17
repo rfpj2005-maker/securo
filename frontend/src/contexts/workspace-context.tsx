@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
-import { workspaces as workspacesApi, WORKSPACE_STORAGE_KEY } from '@/lib/api'
+import { auth as authApi, workspaces as workspacesApi, WORKSPACE_STORAGE_KEY } from '@/lib/api'
 import type { ModuleId } from '@/lib/modules'
 import type { FeatureId } from '@/lib/features'
 import type { Workspace, WorkspaceRole } from '@/types'
@@ -37,7 +37,7 @@ interface WorkspaceContextType {
 const WorkspaceContext = createContext<WorkspaceContextType | null>(null)
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { user, token, isLoading: authLoading } = useAuth()
+  const { user, token, isLoading: authLoading, updateUser } = useAuth()
   const [list, setList] = useState<Workspace[]>([])
   const [currentId, setCurrentId] = useState<string | null>(() => localStorage.getItem(WORKSPACE_STORAGE_KEY))
   const [isLoading, setIsLoading] = useState(true)
@@ -50,13 +50,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setList(fetched)
       // Reconcile the stored selection against what's actually accessible.
       // If the stored ID is stale (workspace archived, user removed, etc.)
-      // fall back to the first one.
+      // fall back to the user's pinned default (preferences.default_workspace_id
+      // — set automatically on every switchWorkspace call, see below) so a
+      // fresh device/browser lands where they last chose everywhere else,
+      // not just wherever this one happened to remember. Only when that's
+      // also unset/stale do we fall back to the first (oldest) workspace.
       const storedId = localStorage.getItem(WORKSPACE_STORAGE_KEY)
       const found = fetched.find((w) => w.id === storedId)
       if (found) {
         setCurrentId(found.id)
       } else if (fetched.length > 0) {
-        const fallbackId = fetched[0].id
+        const preferredId = user?.preferences?.default_workspace_id
+        const preferred = fetched.find((w) => w.id === preferredId)
+        const fallbackId = (preferred ?? fetched[0]).id
         localStorage.setItem(WORKSPACE_STORAGE_KEY, fallbackId)
         setCurrentId(fallbackId)
       } else {
@@ -70,7 +76,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
     // Stay in the loading state until auth has settled. Reporting "done,
@@ -100,8 +106,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // triggering refetches (mounted components kept their previous
       // render until a manual reload).
       await queryClient.resetQueries()
+      // Also persist server-side (not just localStorage) so this becomes
+      // the workspace a fresh login/new device lands on too — see
+      // backend workspace_service.get_default_workspace. Best-effort: a
+      // failure here shouldn't block the switch the user is already
+      // looking at, it just means the next fresh device falls back to
+      // the old default until they switch again from here.
+      if (user) {
+        const nextPreferences = { ...user.preferences, default_workspace_id: id }
+        authApi
+          .updateMe({ preferences: nextPreferences })
+          .then((updated) => updateUser(updated))
+          .catch(() => {})
+      }
     },
-    [currentId, queryClient],
+    [currentId, queryClient, user, updateUser],
   )
 
   const current = useMemo(

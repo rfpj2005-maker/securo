@@ -92,6 +92,10 @@ export interface UserPreferences {
   currency_display?: string
   display_name?: string
   onboarding_completed?: boolean
+  /** Which workspace to land on with no X-Workspace-Id header (a fresh
+   *  login/device) — see backend workspace_service.get_default_workspace.
+   *  Set automatically on every switchWorkspace call. */
+  default_workspace_id?: string
 }
 
 export interface Category {
@@ -818,6 +822,7 @@ export interface Task {
   due_date: string | null
   due_time: string | null // HH:MM:SS
   status: 'pending' | 'completed'
+  notes: string | null
   source_meeting_id: string | null
   created_at: string
   updated_at: string

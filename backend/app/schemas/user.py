@@ -11,6 +11,11 @@ class UserPreferences(BaseModel):
     timezone: str = "UTC"
     currency_display: str = "USD"
     onboarding_completed: bool = False
+    # Which workspace to land on with no X-Workspace-Id header (a fresh
+    # login/device) — see workspace_service.get_default_workspace. Not
+    # required to be a valid/current workspace id; an unset or stale value
+    # just falls back to "oldest workspace" as before.
+    default_workspace_id: Optional[str] = None
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):

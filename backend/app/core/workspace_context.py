@@ -90,7 +90,7 @@ async def current_workspace(
         return WorkspaceContext(workspace=workspace, member=member, user=user)
 
     # Fallback: user's first non-archived workspace (member-of or managed).
-    default = await get_default_workspace(session, user.id)
+    default = await get_default_workspace(session, user)
     if default is None:
         raise HTTPException(status_code=404, detail="No workspace available")
     member = await get_membership(session, default.id, user.id)

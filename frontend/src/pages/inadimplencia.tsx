@@ -19,7 +19,7 @@ import { ExternalLink } from 'lucide-react'
 // `inadimplencia` feature (kept as the underlying id/route for
 // continuity) and rastreador-conferencia/README.md for the source of
 // truth.
-const PAINEL_AMPARAR_BASE = 'https://desktop-s200k6m.tail50b52d.ts.net:8444'
+const PAINEL_AMPARAR_BASE = 'https://servidor-ampara.tail887dc2.ts.net:8444'
 
 export default function InadimplenciaPage() {
   const { t } = useTranslation()

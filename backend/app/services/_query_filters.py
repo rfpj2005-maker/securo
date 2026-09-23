@@ -94,21 +94,35 @@ def reporting_date_col(accounting_mode: str):
     return func.coalesce(Transaction.effective_bill_date, base)
 
 
-def counts_as_pnl():
+def counts_as_pnl(*, include_transfer_categories: bool = False):
     """SQL filter: True when a transaction should contribute to income/expense totals.
 
     Excludes:
       - paired transfers (both legs were matched; already cancel out),
       - transactions in categories flagged `treat_as_transfer` (one-sided
         movements like investment applications where the counterpart is
-        an Asset/Holding, not another Account),
+        an Asset/Holding, not another Account) — unless
+        `include_transfer_categories` is set (see below),
       - transactions flagged `is_ignored=True` (user-marked as not to be reported),
       - transactions in categories flagged `is_ignored=True` (user-marked as not to be reported).
 
     Does NOT exclude `source='opening_balance'` — callers that already
     filter those keep doing so; this helper only handles the transfer-like
     exclusion family so both rules stay visible at each call site.
+
+    `include_transfer_categories=True` keeps `treat_as_transfer`-categorized
+    transactions in the total (still drops matched paired transfers and
+    ignored ones). Meant for a credit card's own bill/invoice total: a
+    purchase auto-categorized as e.g. "Transferências" (a boleto paid with
+    the card, mis-matched by the description) is still real card debt the
+    bank's statement includes — unlike an actual transfer between the
+    user's own bank accounts, which genuinely isn't spending.
     """
+    category_exclusion = (
+        [Category.is_ignored.is_(True)]
+        if include_transfer_categories
+        else [Category.treat_as_transfer.is_(True), Category.is_ignored.is_(True)]
+    )
     return and_(
         Transaction.transfer_pair_id.is_(None),
         Transaction.is_ignored.is_(False),
@@ -121,14 +135,7 @@ def counts_as_pnl():
         ~and_(Transaction.source == "settlement", Transaction.type == "debit"),
         or_(
             Transaction.category_id.is_(None),
-            Transaction.category_id.not_in(
-                select(Category.id).where(
-                    or_(
-                        Category.treat_as_transfer.is_(True),
-                        Category.is_ignored.is_(True),
-                    )
-                )
-            ),
+            Transaction.category_id.not_in(select(Category.id).where(or_(*category_exclusion))),
         ),
     )
 

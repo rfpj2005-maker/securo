@@ -1556,6 +1556,25 @@
       "testFailed": "Couldn't send — try re-enabling",
       "activeHint": "You'll get a notification when a task is due.",
       "inactiveHint": "Turn on to be notified when a task is due."
+    },
+    "recurrence": {
+      "label": "Repeat",
+      "none": "Does not repeat",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "yearly": "Yearly",
+      "needsDueDate": "Set a due date to enable repeating — great for medication reminders.",
+      "every": "Every",
+      "until": "Repeat until (optional)",
+      "unitDaily": "day(s)",
+      "unitWeekly": "week(s)",
+      "unitMonthly": "month(s)",
+      "unitYearly": "year(s)",
+      "chipDaily": "Daily",
+      "chipWeekly": "Weekly",
+      "chipMonthly": "Monthly",
+      "chipYearly": "Yearly"
     }
   },
   "common": {

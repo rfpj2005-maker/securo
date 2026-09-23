@@ -20,6 +20,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.ampararprotecao.bussola.ui.components.formatBrl
 
+// Mirrors frontend/src/pages/accounts.tsx's type options — the only three
+// account types the backend actually uses (backend/app/models/account.py).
+private fun accountTypeLabel(type: String): String = when (type) {
+    "checking" -> "Conta Corrente"
+    "savings" -> "Poupança"
+    "credit_card" -> "Cartão de Crédito"
+    else -> type
+}
+
 @Composable
 fun AccountsScreen(modifier: Modifier = Modifier, viewModel: AccountsViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
@@ -35,7 +44,7 @@ fun AccountsScreen(modifier: Modifier = Modifier, viewModel: AccountsViewModel =
             items(state.accounts) { acc ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text(acc.displayName ?: acc.name, style = MaterialTheme.typography.bodyLarge)
-                    Text(acc.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(accountTypeLabel(acc.type), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(formatBrl(acc.currentBalance), style = MaterialTheme.typography.titleMedium)
                 }
                 HorizontalDivider()

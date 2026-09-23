@@ -3,8 +3,10 @@ package br.com.ampararprotecao.bussola.di
 import br.com.ampararprotecao.bussola.data.BussolaTokenStore
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAccountsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAuthApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCalendarApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCategoriesApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaDashboardApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTasksApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTransactionsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaWorkspacesApi
 import br.com.ampararprotecao.bussola.data.painelamparar.api.PainelAuthApi
@@ -25,8 +27,12 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-private const val BUSSOLA_BASE_URL = "https://desktop-s200k6m.tail50b52d.ts.net/api/"
-private const val PAINEL_AMPARAR_BASE_URL = "https://desktop-s200k6m.tail50b52d.ts.net:8444/api/"
+// 2026-09-22: this host moved from the personal Tailscale account to the
+// company one (matrizamparar@) during the tailnet migration, which
+// reassigned the hostname (old one, desktop-s200k6m.tail50b52d.ts.net, is
+// dead now).
+private const val BUSSOLA_BASE_URL = "https://servidor-ampara.tail887dc2.ts.net/api/"
+private const val PAINEL_AMPARAR_BASE_URL = "https://servidor-ampara.tail887dc2.ts.net:8444/api/"
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
@@ -132,6 +138,14 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideBussolaAccountsApi(@BussolaRetrofit retrofit: Retrofit): BussolaAccountsApi = retrofit.create(BussolaAccountsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaTasksApi(@BussolaRetrofit retrofit: Retrofit): BussolaTasksApi = retrofit.create(BussolaTasksApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaCalendarApi(@BussolaRetrofit retrofit: Retrofit): BussolaCalendarApi = retrofit.create(BussolaCalendarApi::class.java)
 
     @Provides
     @Singleton

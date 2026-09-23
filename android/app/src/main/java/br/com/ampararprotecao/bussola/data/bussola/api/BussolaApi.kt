@@ -1,12 +1,22 @@
 package br.com.ampararprotecao.bussola.data.bussola.api
 
 import br.com.ampararprotecao.bussola.data.bussola.model.Account
+import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventRead
+import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.Category
 import br.com.ampararprotecao.bussola.data.bussola.model.DashboardSummary
+import br.com.ampararprotecao.bussola.data.bussola.model.GoogleCalendarStatus
 import br.com.ampararprotecao.bussola.data.bussola.model.LoginResponse
 import br.com.ampararprotecao.bussola.data.bussola.model.MemberModulesUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.PaginatedTransactions
 import br.com.ampararprotecao.bussola.data.bussola.model.SpendingByCategory
+import br.com.ampararprotecao.bussola.data.bussola.model.Subtask
+import br.com.ampararprotecao.bussola.data.bussola.model.SubtaskCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.SubtaskUpdate
+import br.com.ampararprotecao.bussola.data.bussola.model.Task
+import br.com.ampararprotecao.bussola.data.bussola.model.TaskCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.TaskUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.Transaction
 import br.com.ampararprotecao.bussola.data.bussola.model.TransactionEditPayload
 import br.com.ampararprotecao.bussola.data.bussola.model.TwoFactorVerifyRequest
@@ -95,4 +105,61 @@ interface BussolaCategoriesApi {
 interface BussolaAccountsApi {
     @GET("accounts")
     suspend fun list(@Query("include_closed") includeClosed: Boolean = false): List<Account>
+}
+
+interface BussolaTasksApi {
+    @GET("tasks")
+    suspend fun list(
+        @Query("category") category: String? = null,
+        @Query("status") status: String? = null,
+    ): List<Task>
+
+    @GET("tasks/{id}")
+    suspend fun get(@Path("id") id: String): Task
+
+    @POST("tasks")
+    suspend fun create(@Body body: TaskCreate): Task
+
+    @PATCH("tasks/{id}")
+    suspend fun update(@Path("id") id: String, @Body body: TaskUpdate): Task
+
+    @DELETE("tasks/{id}")
+    suspend fun delete(@Path("id") id: String)
+
+    @POST("tasks/{taskId}/subtasks")
+    suspend fun createSubtask(@Path("taskId") taskId: String, @Body body: SubtaskCreate): Subtask
+
+    @PATCH("tasks/{taskId}/subtasks/{subtaskId}")
+    suspend fun updateSubtask(
+        @Path("taskId") taskId: String,
+        @Path("subtaskId") subtaskId: String,
+        @Body body: SubtaskUpdate,
+    ): Subtask
+
+    @DELETE("tasks/{taskId}/subtasks/{subtaskId}")
+    suspend fun deleteSubtask(@Path("taskId") taskId: String, @Path("subtaskId") subtaskId: String)
+}
+
+interface BussolaCalendarApi {
+    @GET("integrations/google-calendar/status")
+    suspend fun status(): GoogleCalendarStatus
+
+    @GET("integrations/google-calendar/events")
+    suspend fun events(
+        @Query("start") start: String? = null,
+        @Query("end") end: String? = null,
+    ): List<CalendarEventRead>
+
+    @POST("integrations/google-calendar/events")
+    suspend fun createEvent(@Body body: CalendarEventCreate): CalendarEventRead
+
+    @PATCH("integrations/google-calendar/events/{id}")
+    suspend fun updateEvent(
+        @Path("id") id: String,
+        @Query("calendar_id") calendarId: String,
+        @Body body: CalendarEventUpdate,
+    ): CalendarEventRead
+
+    @DELETE("integrations/google-calendar/events/{id}")
+    suspend fun deleteEvent(@Path("id") id: String, @Query("calendar_id") calendarId: String)
 }

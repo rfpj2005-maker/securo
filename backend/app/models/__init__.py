@@ -31,6 +31,7 @@ from app.models.gmail_connection import GmailConnection
 from app.models.email_connection import EmailConnection
 from app.models.meeting import Meeting
 from app.models.push_subscription import PushSubscription
+from app.models.calendar_event_reminder import CalendarEventReminder
 
 # Side-effect import: register the before_insert listener that auto-stamps
 # workspace_id from user_id on financial entities. Imported last so all

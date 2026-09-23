@@ -104,8 +104,11 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
-    // Encrypted local storage for the Bússola JWT + Painel Amparar cookie
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // Encrypted local storage for the Bússola JWT + Painel Amparar cookie.
+    // Stable 1.1.0 (not the old 1.1.0-alpha06) — the alpha had known
+    // AndroidKeyStore crashes on some devices (Samsung One UI included)
+    // that this release fixes.
+    implementation("androidx.security:security-crypto:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

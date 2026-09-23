@@ -10,6 +10,15 @@ sealed class Screen(val route: String) {
         fun route(id: String? = null) = "transaction_edit?id=${id ?: ""}"
     }
     data object Accounts : Screen("accounts")
+    data object Tasks : Screen("tasks")
+    data object TaskEdit : Screen("task_edit?id={id}") {
+        fun route(id: String? = null) = "task_edit?id=${id ?: ""}"
+    }
+    data object Calendar : Screen("calendar")
+    data object CalendarEventEdit : Screen("calendar_event_edit?id={id}&calendarId={calendarId}") {
+        fun route(id: String? = null, calendarId: String? = null) =
+            "calendar_event_edit?id=${id ?: ""}&calendarId=${calendarId ?: ""}"
+    }
     data object Carne : Screen("carne")
     data object Cobranca : Screen("cobranca")
     data object PainelDashboard : Screen("painel_dashboard")
@@ -32,6 +41,8 @@ val DRAWER_ITEMS = listOf(
     DrawerItem(Screen.Dashboard, "Dashboard", featureId = null),
     DrawerItem(Screen.Transactions, "Transações", featureId = null),
     DrawerItem(Screen.Accounts, "Contas", featureId = null),
+    DrawerItem(Screen.Tasks, "Tarefas", featureId = "tasks"),
+    DrawerItem(Screen.Calendar, "Calendário", featureId = "calendar"),
     DrawerItem(Screen.Carne, "Carnê", featureId = "pa_carne", requiresPainelAmparar = true),
     DrawerItem(Screen.Cobranca, "Cobrança", featureId = "pa_cobranca", requiresPainelAmparar = true),
     DrawerItem(Screen.PainelDashboard, "Dashboard Amparar", featureId = "pa_dashboard", requiresPainelAmparar = true),

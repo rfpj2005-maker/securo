@@ -824,6 +824,9 @@ export interface Task {
   status: 'pending' | 'completed'
   notes: string | null
   source_meeting_id: string | null
+  recurrence_frequency: 'daily' | 'weekly' | 'monthly' | 'yearly' | null
+  recurrence_interval: number
+  recurrence_end_date: string | null
   created_at: string
   updated_at: string
   subtasks: Subtask[]

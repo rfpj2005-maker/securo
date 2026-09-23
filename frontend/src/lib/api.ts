@@ -1149,11 +1149,11 @@ export const tasks = {
     const { data } = await api.get(`/tasks/${id}`)
     return data
   },
-  create: async (task: { title: string; category?: string; due_date?: string | null; due_time?: string | null; status?: string; notes?: string | null }): Promise<Task> => {
+  create: async (task: { title: string; category?: string; due_date?: string | null; due_time?: string | null; status?: string; notes?: string | null; recurrence_frequency?: string | null; recurrence_interval?: number; recurrence_end_date?: string | null }): Promise<Task> => {
     const { data } = await api.post('/tasks', task)
     return data
   },
-  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'due_time' | 'status' | 'notes'>>): Promise<Task> => {
+  update: async (id: string, task: Partial<Pick<Task, 'title' | 'category' | 'due_date' | 'due_time' | 'status' | 'notes' | 'recurrence_frequency' | 'recurrence_interval' | 'recurrence_end_date'>>): Promise<Task> => {
     const { data } = await api.patch(`/tasks/${id}`, task)
     return data
   },

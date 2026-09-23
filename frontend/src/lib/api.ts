@@ -43,6 +43,9 @@ import type {
   GoalSummary,
   Task,
   Subtask,
+  Vehicle,
+  VehicleRecord,
+  VehicleReminder,
   Meeting,
   MeetingListItem,
   GoogleCalendarStatus,
@@ -1046,6 +1049,71 @@ export const tasks = {
     },
     delete: async (taskId: string, subtaskId: string): Promise<void> => {
       await api.delete(`/tasks/${taskId}/subtasks/${subtaskId}`)
+    },
+  },
+}
+
+// Vehicles — fleet/personal vehicle control: fill-ups, services, reminders.
+export type VehiclePayload = Partial<
+  Pick<Vehicle, 'name' | 'plate' | 'brand' | 'model' | 'year' | 'color' | 'fuel_type' | 'initial_odometer' | 'notes' | 'is_active'>
+>
+export type VehicleRecordPayload = Partial<
+  Pick<VehicleRecord, 'kind' | 'date' | 'odometer' | 'amount' | 'liters' | 'full_tank' | 'description'>
+>
+export type VehicleReminderPayload = Partial<Pick<VehicleReminder, 'title' | 'due_date' | 'due_odometer' | 'is_done'>>
+
+export const vehicles = {
+  list: async (): Promise<Vehicle[]> => {
+    const { data } = await api.get('/vehicles')
+    return data
+  },
+  get: async (id: string): Promise<Vehicle> => {
+    const { data } = await api.get(`/vehicles/${id}`)
+    return data
+  },
+  create: async (vehicle: VehiclePayload): Promise<Vehicle> => {
+    const { data } = await api.post('/vehicles', vehicle)
+    return data
+  },
+  update: async (id: string, vehicle: VehiclePayload): Promise<Vehicle> => {
+    const { data } = await api.patch(`/vehicles/${id}`, vehicle)
+    return data
+  },
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/vehicles/${id}`)
+  },
+  records: {
+    list: async (vehicleId: string): Promise<VehicleRecord[]> => {
+      const { data } = await api.get(`/vehicles/${vehicleId}/records`)
+      return data
+    },
+    create: async (vehicleId: string, record: VehicleRecordPayload): Promise<VehicleRecord> => {
+      const { data } = await api.post(`/vehicles/${vehicleId}/records`, record)
+      return data
+    },
+    update: async (vehicleId: string, recordId: string, record: VehicleRecordPayload): Promise<VehicleRecord> => {
+      const { data } = await api.patch(`/vehicles/${vehicleId}/records/${recordId}`, record)
+      return data
+    },
+    delete: async (vehicleId: string, recordId: string): Promise<void> => {
+      await api.delete(`/vehicles/${vehicleId}/records/${recordId}`)
+    },
+  },
+  reminders: {
+    list: async (vehicleId: string): Promise<VehicleReminder[]> => {
+      const { data } = await api.get(`/vehicles/${vehicleId}/reminders`)
+      return data
+    },
+    create: async (vehicleId: string, reminder: VehicleReminderPayload): Promise<VehicleReminder> => {
+      const { data } = await api.post(`/vehicles/${vehicleId}/reminders`, reminder)
+      return data
+    },
+    update: async (vehicleId: string, reminderId: string, reminder: VehicleReminderPayload): Promise<VehicleReminder> => {
+      const { data } = await api.patch(`/vehicles/${vehicleId}/reminders/${reminderId}`, reminder)
+      return data
+    },
+    delete: async (vehicleId: string, reminderId: string): Promise<void> => {
+      await api.delete(`/vehicles/${vehicleId}/reminders/${reminderId}`)
     },
   },
 }

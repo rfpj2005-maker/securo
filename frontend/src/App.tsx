@@ -33,6 +33,8 @@ const TasksPage = lazy(() => import('@/pages/tasks'))
 const VoiceTaskPage = lazy(() => import('@/pages/voice-task'))
 const CalendarPage = lazy(() => import('@/pages/calendar'))
 const MeetingsPage = lazy(() => import('@/pages/meetings'))
+const VehiclesPage = lazy(() => import('@/pages/vehicles'))
+const VehicleDetailPage = lazy(() => import('@/pages/vehicle-detail'))
 const GroupsPage = lazy(() => import('@/pages/groups'))
 const GroupDetailPage = lazy(() => import('@/pages/group-detail'))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/settings'))
@@ -103,6 +105,8 @@ function App() {
                   <Route path="/tasks/voice" element={<VoiceTaskPage />} />
                   <Route path="/calendar" element={<CalendarPage />} />
                   <Route path="/meetings" element={<MeetingsPage />} />
+                  <Route path="/vehicles" element={<VehiclesPage />} />
+                  <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
                   <Route path="/groups" element={<ModuleRoute module="split_groups"><GroupsPage /></ModuleRoute>} />
                   <Route path="/groups/:id" element={<ModuleRoute module="split_groups"><GroupDetailPage /></ModuleRoute>} />
                   <Route path="/invoices" element={<ModuleRoute module="invoices"><InvoicesPage /></ModuleRoute>} />

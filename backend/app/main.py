@@ -38,6 +38,7 @@ from app.api.payees import router as payees_router
 from app.api.settings import router as settings_router
 from app.api.subtasks import router as subtasks_router
 from app.api.tasks import router as tasks_router
+from app.api.vehicles import router as vehicles_router
 from app.api.transactions import router as transactions_router
 from app.api.two_factor import router as two_factor_router
 from app.api.user_lookup import router as user_lookup_router
@@ -186,6 +187,7 @@ app.include_router(tasks_router)
 app.include_router(subtasks_router)
 app.include_router(google_calendar_router)
 app.include_router(meetings_router)
+app.include_router(vehicles_router)
 app.include_router(settings_router)
 app.include_router(workspaces_router)
 app.include_router(admin_router)

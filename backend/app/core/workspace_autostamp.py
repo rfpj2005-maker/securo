@@ -39,6 +39,7 @@ from app.models.task import Task
 from app.models.transaction import Transaction
 from app.models.transaction_attachment import TransactionAttachment
 from app.models.transaction_split import TransactionSplit
+from app.models.vehicle import Vehicle, VehicleRecord, VehicleReminder
 from app.models.workspace import Workspace, WorkspaceMember
 
 
@@ -66,6 +67,9 @@ _AUTOSTAMP_MODELS = (
     Transaction,
     TransactionAttachment,
     TransactionSplit,
+    Vehicle,
+    VehicleRecord,
+    VehicleReminder,
 )
 
 
@@ -112,6 +116,7 @@ _PARENT_LOOKUPS: tuple[tuple[str, str], ...] = (
     ("group_id", "app.models.group:Group"),
     ("transaction_id", "app.models.transaction:Transaction"),
     ("task_id", "app.models.task:Task"),
+    ("vehicle_id", "app.models.vehicle:Vehicle"),
     ("agent_id", "app.agents.models.agent:Agent"),
 )
 

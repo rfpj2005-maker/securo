@@ -771,6 +771,67 @@ export interface Task {
   subtasks: Subtask[]
 }
 
+export type VehicleFuelType = 'flex' | 'gasoline' | 'ethanol' | 'diesel' | 'cng' | 'electric' | 'hybrid'
+export type VehicleRecordKind = 'fuel' | 'maintenance' | 'expense'
+
+export interface VehicleStats {
+  current_odometer: number
+  distance: number
+  // Decimals come over the wire as strings.
+  total_cost: string
+  fuel_cost: string
+  maintenance_cost: string
+  other_cost: string
+  total_liters: string
+  avg_consumption: string | null
+  cost_per_km: string | null
+  pending_reminders: number
+  overdue_reminders: number
+}
+
+export interface Vehicle {
+  id: string
+  user_id: string
+  name: string
+  plate: string | null
+  brand: string | null
+  model: string | null
+  year: number | null
+  color: string | null
+  fuel_type: VehicleFuelType
+  initial_odometer: number
+  notes: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  stats: VehicleStats
+}
+
+export interface VehicleRecord {
+  id: string
+  vehicle_id: string
+  kind: VehicleRecordKind
+  date: string
+  odometer: number | null
+  amount: string
+  liters: string | null
+  full_tank: boolean
+  description: string | null
+  consumption: string | null
+  created_at: string
+}
+
+export interface VehicleReminder {
+  id: string
+  vehicle_id: string
+  title: string
+  due_date: string | null
+  due_odometer: number | null
+  is_done: boolean
+  is_overdue: boolean
+  created_at: string
+}
+
 export type MeetingType = 'in_person' | 'online'
 export type MeetingStatus = 'pending' | 'transcribing' | 'summarizing' | 'completed' | 'failed'
 

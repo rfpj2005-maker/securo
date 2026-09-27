@@ -1,17 +1,30 @@
 package br.com.ampararprotecao.bussola.data.bussola.api
 
 import br.com.ampararprotecao.bussola.data.bussola.model.Account
+import br.com.ampararprotecao.bussola.data.bussola.model.Budget
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetUpdate
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetVsActual
 import br.com.ampararprotecao.bussola.data.bussola.model.Camera
 import br.com.ampararprotecao.bussola.data.bussola.model.CameraRecording
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventRead
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.Category
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryGroup
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.DashboardSummary
+import br.com.ampararprotecao.bussola.data.bussola.model.Goal
+import br.com.ampararprotecao.bussola.data.bussola.model.GoalCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.GoalUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.GoogleCalendarStatus
 import br.com.ampararprotecao.bussola.data.bussola.model.LoginResponse
 import br.com.ampararprotecao.bussola.data.bussola.model.MemberModulesUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.PaginatedTransactions
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransaction
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransactionCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransactionUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.SpendingByCategory
 import br.com.ampararprotecao.bussola.data.bussola.model.Subtask
 import br.com.ampararprotecao.bussola.data.bussola.model.SubtaskCreate
@@ -103,6 +116,63 @@ interface BussolaTransactionsApi {
 interface BussolaCategoriesApi {
     @GET("categories")
     suspend fun list(): List<Category>
+
+    @POST("categories")
+    suspend fun create(@Body body: CategoryCreate): Category
+
+    @PATCH("categories/{id}")
+    suspend fun update(@Path("id") id: String, @Body body: CategoryUpdate): Category
+
+    @DELETE("categories/{id}")
+    suspend fun delete(@Path("id") id: String)
+
+    @GET("category-groups")
+    suspend fun groups(): List<CategoryGroup>
+}
+
+interface BussolaBudgetsApi {
+    @GET("budgets")
+    suspend fun list(@Query("month") month: String? = null): List<Budget>
+
+    @GET("budgets/comparison")
+    suspend fun comparison(@Query("month") month: String? = null): List<BudgetVsActual>
+
+    @POST("budgets")
+    suspend fun create(@Body body: BudgetCreate): Budget
+
+    @PATCH("budgets/{id}")
+    suspend fun update(@Path("id") id: String, @Body body: BudgetUpdate): Budget
+
+    @DELETE("budgets/{id}")
+    suspend fun delete(@Path("id") id: String)
+}
+
+interface BussolaGoalsApi {
+    @GET("goals")
+    suspend fun list(): List<Goal>
+
+    @POST("goals")
+    suspend fun create(@Body body: GoalCreate): Goal
+
+    @PATCH("goals/{id}")
+    suspend fun update(@Path("id") id: String, @Body body: GoalUpdate): Goal
+
+    @DELETE("goals/{id}")
+    suspend fun delete(@Path("id") id: String)
+}
+
+interface BussolaRecurringApi {
+    @GET("recurring-transactions")
+    suspend fun list(): List<RecurringTransaction>
+
+    @POST("recurring-transactions")
+    suspend fun create(@Body body: RecurringTransactionCreate): RecurringTransaction
+
+    @PATCH("recurring-transactions/{id}")
+    suspend fun update(@Path("id") id: String, @Body body: RecurringTransactionUpdate): RecurringTransaction
+
+    @DELETE("recurring-transactions/{id}")
+    suspend fun delete(@Path("id") id: String)
 }
 
 interface BussolaAccountsApi {

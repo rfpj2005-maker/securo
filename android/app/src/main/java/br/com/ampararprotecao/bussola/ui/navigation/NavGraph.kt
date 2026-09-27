@@ -21,14 +21,19 @@ import br.com.ampararprotecao.bussola.ui.calendar.CalendarEventEditScreen
 import br.com.ampararprotecao.bussola.ui.calendar.CalendarScreen
 import br.com.ampararprotecao.bussola.ui.cameras.CameraDetailScreen
 import br.com.ampararprotecao.bussola.ui.cameras.CamerasListScreen
+import br.com.ampararprotecao.bussola.ui.budgets.BudgetsScreen
 import br.com.ampararprotecao.bussola.ui.carne.CarneScreen
+import br.com.ampararprotecao.bussola.ui.categories.CategoriesScreen
 import br.com.ampararprotecao.bussola.ui.cobranca.CobrancaScreen
 import br.com.ampararprotecao.bussola.ui.components.AppScaffold
 import br.com.ampararprotecao.bussola.ui.dashboard.DashboardScreen
 import br.com.ampararprotecao.bussola.ui.login.LoginScreen
 import br.com.ampararprotecao.bussola.ui.login.TwoFactorScreen
 import br.com.ampararprotecao.bussola.ui.paineldashboard.PainelDashboardScreen
+import br.com.ampararprotecao.bussola.ui.goals.GoalsScreen
 import br.com.ampararprotecao.bussola.ui.permissions.PermissionsScreen
+import br.com.ampararprotecao.bussola.ui.recurring.RecurringEditScreen
+import br.com.ampararprotecao.bussola.ui.recurring.RecurringListScreen
 import br.com.ampararprotecao.bussola.ui.tasks.TaskEditScreen
 import br.com.ampararprotecao.bussola.ui.tasks.TasksListScreen
 import br.com.ampararprotecao.bussola.ui.transactions.TransactionEditScreen
@@ -201,6 +206,50 @@ fun BussolaNavHost() {
                     modifier = padding,
                     eventId = id,
                     calendarId = calendarId,
+                    onSaved = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() },
+                )
+            }
+        }
+        composable(Screen.Categories.route) {
+            AppScaffold(sessionViewModel, "Categorias", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                CategoriesScreen(modifier = padding)
+            }
+        }
+        composable(Screen.Budgets.route) {
+            AppScaffold(sessionViewModel, "Orçamentos", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                BudgetsScreen(modifier = padding)
+            }
+        }
+        composable(Screen.Goals.route) {
+            AppScaffold(sessionViewModel, "Metas", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                GoalsScreen(modifier = padding)
+            }
+        }
+        composable(Screen.Recurring.route) {
+            AppScaffold(sessionViewModel, "Recorrentes", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                RecurringListScreen(
+                    modifier = padding,
+                    onAdd = { navController.navigate(Screen.RecurringEdit.route()) },
+                    onOpen = { id -> navController.navigate(Screen.RecurringEdit.route(id)) },
+                )
+            }
+        }
+        composable(
+            Screen.RecurringEdit.route,
+            arguments = listOf(
+                navArgument("id") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = ""
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val id = entry.arguments?.getString("id")?.ifBlank { null }
+            AppScaffold(sessionViewModel, if (id == null) "Nova recorrência" else "Editar recorrência", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                RecurringEditScreen(
+                    modifier = padding,
+                    recurringId = id,
                     onSaved = { navController.popBackStack() },
                     onDeleted = { navController.popBackStack() },
                 )

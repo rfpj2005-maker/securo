@@ -73,6 +73,11 @@ class SessionViewModel @Inject constructor(
         return currentWorkspace.value?.hasFeature(featureId) == true
     }
 
+    fun hasModule(moduleId: String?): Boolean {
+        if (moduleId == null) return true
+        return currentWorkspace.value?.hasModule(moduleId) == true
+    }
+
     fun logout() {
         bussolaTokenStore.clear()
         _workspaces.value = emptyList()

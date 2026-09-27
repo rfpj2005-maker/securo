@@ -3,7 +3,10 @@ package br.com.ampararprotecao.bussola.di
 import br.com.ampararprotecao.bussola.data.BussolaTokenStore
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAccountsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAuthApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaBudgetsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCamerasApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaGoalsApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaRecurringApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCalendarApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCategoriesApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaDashboardApi
@@ -151,6 +154,18 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideBussolaCamerasApi(@BussolaRetrofit retrofit: Retrofit): BussolaCamerasApi = retrofit.create(BussolaCamerasApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaBudgetsApi(@BussolaRetrofit retrofit: Retrofit): BussolaBudgetsApi = retrofit.create(BussolaBudgetsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaGoalsApi(@BussolaRetrofit retrofit: Retrofit): BussolaGoalsApi = retrofit.create(BussolaGoalsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaRecurringApi(@BussolaRetrofit retrofit: Retrofit): BussolaRecurringApi = retrofit.create(BussolaRecurringApi::class.java)
 
     @Provides
     @Singleton

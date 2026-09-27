@@ -2,24 +2,40 @@ package br.com.ampararprotecao.bussola.data.bussola.repository
 
 import br.com.ampararprotecao.bussola.data.BussolaTokenStore
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAccountsApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaBudgetsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCalendarApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCamerasApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCategoriesApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaDashboardApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaGoalsApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaRecurringApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTasksApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTransactionsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaWorkspacesApi
 import br.com.ampararprotecao.bussola.data.bussola.model.Account
+import br.com.ampararprotecao.bussola.data.bussola.model.Budget
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetUpdate
+import br.com.ampararprotecao.bussola.data.bussola.model.BudgetVsActual
 import br.com.ampararprotecao.bussola.data.bussola.model.Camera
 import br.com.ampararprotecao.bussola.data.bussola.model.CameraRecording
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventRead
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.Category
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryGroup
+import br.com.ampararprotecao.bussola.data.bussola.model.CategoryUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.DashboardSummary
+import br.com.ampararprotecao.bussola.data.bussola.model.Goal
+import br.com.ampararprotecao.bussola.data.bussola.model.GoalCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.GoalUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.GoogleCalendarStatus
 import br.com.ampararprotecao.bussola.data.bussola.model.MemberModulesUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.PaginatedTransactions
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransaction
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransactionCreate
+import br.com.ampararprotecao.bussola.data.bussola.model.RecurringTransactionUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.SpendingByCategory
 import br.com.ampararprotecao.bussola.data.bussola.model.Subtask
 import br.com.ampararprotecao.bussola.data.bussola.model.SubtaskCreate
@@ -66,6 +82,35 @@ class BussolaTransactionsRepository @Inject constructor(private val api: Bussola
 @Singleton
 class BussolaCategoriesRepository @Inject constructor(private val api: BussolaCategoriesApi) {
     suspend fun list(): List<Category> = api.list()
+    suspend fun groups(): List<CategoryGroup> = api.groups()
+    suspend fun create(body: CategoryCreate): Category = api.create(body)
+    suspend fun update(id: String, body: CategoryUpdate): Category = api.update(id, body)
+    suspend fun delete(id: String) = api.delete(id)
+}
+
+@Singleton
+class BussolaBudgetsRepository @Inject constructor(private val api: BussolaBudgetsApi) {
+    suspend fun list(month: String? = null): List<Budget> = api.list(month)
+    suspend fun comparison(month: String? = null): List<BudgetVsActual> = api.comparison(month)
+    suspend fun create(body: BudgetCreate): Budget = api.create(body)
+    suspend fun update(id: String, body: BudgetUpdate): Budget = api.update(id, body)
+    suspend fun delete(id: String) = api.delete(id)
+}
+
+@Singleton
+class BussolaGoalsRepository @Inject constructor(private val api: BussolaGoalsApi) {
+    suspend fun list(): List<Goal> = api.list()
+    suspend fun create(body: GoalCreate): Goal = api.create(body)
+    suspend fun update(id: String, body: GoalUpdate): Goal = api.update(id, body)
+    suspend fun delete(id: String) = api.delete(id)
+}
+
+@Singleton
+class BussolaRecurringRepository @Inject constructor(private val api: BussolaRecurringApi) {
+    suspend fun list(): List<RecurringTransaction> = api.list()
+    suspend fun create(body: RecurringTransactionCreate): RecurringTransaction = api.create(body)
+    suspend fun update(id: String, body: RecurringTransactionUpdate): RecurringTransaction = api.update(id, body)
+    suspend fun delete(id: String) = api.delete(id)
 }
 
 @Singleton

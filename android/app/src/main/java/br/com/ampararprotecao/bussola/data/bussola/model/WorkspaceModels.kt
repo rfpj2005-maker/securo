@@ -17,6 +17,7 @@ data class WorkspaceRead(
     @SerialName("enabled_features") val enabledFeatures: List<String> = emptyList(),
 ) {
     fun hasFeature(id: String) = enabledFeatures.contains(id)
+    fun hasModule(id: String) = enabledModules.contains(id)
 }
 
 @Serializable

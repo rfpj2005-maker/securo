@@ -60,7 +60,8 @@ fun AppScaffold(
     val visibleItems = DRAWER_ITEMS.filter { item ->
         (!item.requiresPainelAmparar || painelConnected) &&
             (!item.requiresSuperuser || isSuperuser) &&
-            sessionViewModel.hasFeature(item.featureId)
+            sessionViewModel.hasFeature(item.featureId) &&
+            sessionViewModel.hasModule(item.moduleId)
     }
 
     ModalNavigationDrawer(

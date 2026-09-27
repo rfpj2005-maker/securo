@@ -12,6 +12,7 @@ data class Category(
     @SerialName("color") val color: String? = null,
     @SerialName("is_system") val isSystem: Boolean = false,
     @SerialName("treat_as_transfer") val treatAsTransfer: Boolean = false,
+    @SerialName("is_ignored") val isIgnored: Boolean = false,
 )
 
 /** `balance` (from AccountBase) is the manually-set starting balance used

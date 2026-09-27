@@ -19,6 +19,13 @@ sealed class Screen(val route: String) {
         fun route(id: String? = null, calendarId: String? = null) =
             "calendar_event_edit?id=${id ?: ""}&calendarId=${calendarId ?: ""}"
     }
+    data object Categories : Screen("categories")
+    data object Budgets : Screen("budgets")
+    data object Goals : Screen("goals")
+    data object Recurring : Screen("recurring")
+    data object RecurringEdit : Screen("recurring_edit?id={id}") {
+        fun route(id: String? = null) = "recurring_edit?id=${id ?: ""}"
+    }
     data object Cameras : Screen("cameras")
     data object CameraDetail : Screen("camera_detail/{location}/{cameraId}?name={name}") {
         fun route(location: String, cameraId: Int, name: String) =
@@ -38,6 +45,7 @@ data class DrawerItem(
     val screen: Screen,
     val labelPtBr: String,
     val featureId: String?,
+    val moduleId: String? = null,
     val requiresPainelAmparar: Boolean = false,
     val requiresSuperuser: Boolean = false,
 )
@@ -46,6 +54,10 @@ val DRAWER_ITEMS = listOf(
     DrawerItem(Screen.Dashboard, "Dashboard", featureId = null),
     DrawerItem(Screen.Transactions, "Transações", featureId = null),
     DrawerItem(Screen.Accounts, "Contas", featureId = null),
+    DrawerItem(Screen.Categories, "Categorias", featureId = null, moduleId = "categories"),
+    DrawerItem(Screen.Budgets, "Orçamentos", featureId = null, moduleId = "budgets"),
+    DrawerItem(Screen.Goals, "Metas", featureId = null, moduleId = "goals"),
+    DrawerItem(Screen.Recurring, "Recorrentes", featureId = null, moduleId = "recurring"),
     DrawerItem(Screen.Tasks, "Tarefas", featureId = "tasks"),
     DrawerItem(Screen.Calendar, "Calendário", featureId = "calendar"),
     DrawerItem(Screen.Cameras, "Câmeras", featureId = "cameras"),

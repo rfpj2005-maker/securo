@@ -57,7 +57,7 @@ private fun MemberPermissionsCard(
 ) {
     Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Column(Modifier.padding(16.dp)) {
-            Text(member.displayName, style = MaterialTheme.typography.titleMedium)
+            Text(member.displayName ?: member.email, style = MaterialTheme.typography.titleMedium)
             Text(member.role, style = MaterialTheme.typography.bodySmall)
 
             if (member.role == "owner") {

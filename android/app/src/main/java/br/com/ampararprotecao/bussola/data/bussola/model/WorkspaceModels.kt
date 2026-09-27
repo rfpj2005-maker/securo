@@ -22,7 +22,10 @@ data class WorkspaceRead(
 @Serializable
 data class WorkspaceMember(
     @SerialName("user_id") val userId: String,
-    @SerialName("display_name") val displayName: String,
+    @SerialName("email") val email: String = "",
+    // Nullable — backend/app/schemas/workspace.py's MemberRead.display_name
+    // is Optional[str]; a member who never set one falls back to email.
+    @SerialName("display_name") val displayName: String? = null,
     @SerialName("role") val role: String,
     @SerialName("hidden_modules") val hiddenModules: List<String> = emptyList(),
 )

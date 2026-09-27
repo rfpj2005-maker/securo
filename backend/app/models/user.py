@@ -38,7 +38,7 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
         default=lambda: {
             "language": "pt-BR",
             "date_format": "MM/DD/YYYY",
-            "timezone": "UTC",
+            "timezone": "America/Sao_Paulo",
             "currency_display": "USD",
         },
     )

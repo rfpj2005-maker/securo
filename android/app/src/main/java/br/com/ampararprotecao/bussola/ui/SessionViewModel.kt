@@ -40,7 +40,12 @@ class SessionViewModel @Inject constructor(
     // a Painel Amparar identity (usuarios.js `vincular`), which only the
     // owner can do server-side, not something to "connect" from the app.
     private val _painelAmpararLinked = MutableStateFlow<Boolean?>(null)
-    val painelAmpararConnected: Boolean get() = _painelAmpararLinked.value == true
+    // Exposed as a StateFlow (not a plain get()-only Boolean) so the drawer
+    // actually recomposes once the async /api/config probe resolves —
+    // a plain property read here isn't observed by Compose, so the drawer
+    // would keep hiding Carnê/Cobrança/Dashboard Amparar until some
+    // unrelated recomposition happened to run after the check finished.
+    val painelAmpararLinked: StateFlow<Boolean?> = _painelAmpararLinked.asStateFlow()
 
     val loggedIn: StateFlow<Boolean> = bussolaTokenStore.loggedIn
     val isSuperuser: Boolean get() = bussolaTokenStore.isSuperuser

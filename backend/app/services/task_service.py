@@ -61,6 +61,15 @@ async def update_task(
     # again for the new due date/time.
     if "due_date" in update_data or "due_time" in update_data or update_data.get("status") == "pending":
         task.reminder_sent_at = None
+    # A recurring task always needs a due_date to repeat from — dropping the
+    # due_date (and not setting a new one in the same request) drops the
+    # recurrence too, rather than leaving a repeat with nothing to advance.
+    effective_due_date = update_data["due_date"] if "due_date" in update_data else task.due_date
+    if update_data.get("due_date", "unset") is None and effective_due_date is None:
+        update_data["recurrence_frequency"] = None
+    effective_frequency = update_data.get("recurrence_frequency", task.recurrence_frequency)
+    if effective_frequency and effective_due_date is None:
+        raise ValueError("recurrence_frequency requires a due_date to repeat from")
     for key, value in update_data.items():
         setattr(task, key, value)
 

@@ -795,8 +795,12 @@ async def get_account_summary(
     # Expenses = SUM of debit transactions in window (same exclusions).
     # For credit-card accounts, NET refund credits against debits so the
     # cycle's "Total da fatura" matches the bank's bill (refunds reduce the
-    # invoice amount). counts_as_pnl already excludes paired transfers and
-    # transfer-like categories, so bill payments are not double-counted.
+    # invoice amount). counts_as_pnl(include_transfer_categories=True) still
+    # drops matched paired transfers, but keeps transactions the user
+    # (mis)categorized under a transfer-like category — e.g. a boleto paid
+    # with the card gets auto-categorized as "Transferências", but it's
+    # still real card debt the bank's own invoice total includes (issue:
+    # cycle total came up short by exactly that transaction's amount).
     if account.type == "credit_card":
         signed_for_bill = case(
             (Transaction.type == "credit", -func.abs(effective_amount)),
@@ -808,7 +812,7 @@ async def get_account_summary(
                 Transaction.source != "opening_balance",
                 bucket_date <= today,
                 Transaction.status == "posted",
-                counts_as_pnl(),
+                counts_as_pnl(include_transfer_categories=True),
             ))
         )
     else:
@@ -849,7 +853,7 @@ async def get_account_summary(
                 Transaction.account_id == account_id,
                 Transaction.source != "opening_balance",
                 forecast_condition,
-                counts_as_pnl(),
+                counts_as_pnl(include_transfer_categories=True),
             ))
         )
     else:

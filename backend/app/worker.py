@@ -60,6 +60,14 @@ celery_app.conf.beat_schedule = {
         # itself no-ops instantly if VAPID isn't configured.
         "schedule": 60,
     },
+    "check-upcoming-calendar-events": {
+        "task": "app.tasks.calendar_reminder_tasks.check_upcoming_calendar_events",
+        # Every 5 minutes, not every minute like tasks — this one calls the
+        # Google Calendar API per connected user, so keep it cheap on quota.
+        # Combined with the 15-minute lookahead in the task itself, a
+        # reminder lands ~10-15 minutes before the event.
+        "schedule": 60 * 5,
+    },
     "sync-siprov-carteira": {
         "task": "app.tasks.siprov_tasks.sync_siprov_carteira",
         # Same cadence already used elsewhere for this exact portfolio pull
@@ -77,6 +85,7 @@ celery_app.conf.include = [
     "app.tasks.fx_rate_tasks",
     "app.tasks.meeting_tasks",
     "app.tasks.task_reminder_tasks",
+    "app.tasks.calendar_reminder_tasks",
     "app.tasks.siprov_tasks",
     # Optional agents module — registering the import is harmless when
     # AGENTS_ENABLED=false (the task just won't be dispatched).

@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.models.task import Task
 from app.models.user import User
 from app.services import push_service
+from app.services.task_recurrence import advance_past_due
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,30 @@ async def _check_all() -> int:
 
             try:
                 async with session_maker() as session:
+                    # Roll forward any recurring task whose occurrence date is
+                    # already in the past (whether it was completed or just
+                    # missed) — regardless of status, since a completed
+                    # recurring task (yesterday's dose taken) still needs
+                    # tomorrow's occurrence queued up.
+                    recurring_past_due = (
+                        (
+                            await session.execute(
+                                select(Task).where(
+                                    Task.user_id == user_id,
+                                    Task.recurrence_frequency.isnot(None),
+                                    Task.due_date != None,  # noqa: E711
+                                    Task.due_date < now_local.date(),
+                                )
+                            )
+                        )
+                        .scalars()
+                        .all()
+                    )
+                    if recurring_past_due:
+                        for task in recurring_past_due:
+                            advance_past_due(task, now_local.date())
+                        await session.commit()
+
                     due_tasks = (
                         (
                             await session.execute(

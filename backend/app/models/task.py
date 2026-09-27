@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Text, Time
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -37,6 +37,14 @@ class Task(Base):
     # reminder job never notifies the same task twice. Cleared automatically
     # whenever due_date/due_time changes (see task_service.update_task).
     reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Recurrence — null means "does not repeat". When set, the periodic
+    # reminder job (task_reminder_tasks.py) rolls due_date forward by
+    # recurrence_interval * recurrence_frequency once it's in the past,
+    # resetting status to pending and reminder_sent_at to null so the task
+    # behaves like a fresh occurrence (e.g. a daily medication reminder).
+    recurrence_frequency: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # daily, weekly, monthly, yearly
+    recurrence_interval: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    recurrence_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # Set when a task was auto-created from a meeting's action items. Nullable —
     # most tasks aren't meeting-sourced. ON DELETE SET NULL so removing the
     # meeting recording keeps the task, just detaches its origin.

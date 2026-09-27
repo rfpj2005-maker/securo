@@ -8,7 +8,7 @@ from pydantic import BaseModel
 class UserPreferences(BaseModel):
     language: str = "pt-BR"
     date_format: str = "MM/DD/YYYY"
-    timezone: str = "UTC"
+    timezone: str = "America/Sao_Paulo"
     currency_display: str = "USD"
     onboarding_completed: bool = False
     # Which workspace to land on with no X-Workspace-Id header (a fresh

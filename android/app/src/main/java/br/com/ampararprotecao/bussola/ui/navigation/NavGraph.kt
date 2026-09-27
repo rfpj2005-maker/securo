@@ -17,6 +17,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import br.com.ampararprotecao.bussola.ui.SessionViewModel
 import br.com.ampararprotecao.bussola.ui.accounts.AccountsScreen
+import br.com.ampararprotecao.bussola.ui.calendar.CalendarEventEditScreen
+import br.com.ampararprotecao.bussola.ui.calendar.CalendarScreen
 import br.com.ampararprotecao.bussola.ui.carne.CarneScreen
 import br.com.ampararprotecao.bussola.ui.cobranca.CobrancaScreen
 import br.com.ampararprotecao.bussola.ui.components.AppScaffold
@@ -25,6 +27,8 @@ import br.com.ampararprotecao.bussola.ui.login.LoginScreen
 import br.com.ampararprotecao.bussola.ui.login.TwoFactorScreen
 import br.com.ampararprotecao.bussola.ui.paineldashboard.PainelDashboardScreen
 import br.com.ampararprotecao.bussola.ui.permissions.PermissionsScreen
+import br.com.ampararprotecao.bussola.ui.tasks.TaskEditScreen
+import br.com.ampararprotecao.bussola.ui.tasks.TasksListScreen
 import br.com.ampararprotecao.bussola.ui.transactions.TransactionEditScreen
 import br.com.ampararprotecao.bussola.ui.transactions.TransactionsListScreen
 
@@ -47,6 +51,21 @@ fun BussolaNavHost() {
             navController.navigate(Screen.Login.route) {
                 popUpTo(0)
             }
+        }
+    }
+
+    // LoginScreen/TwoFactorScreen call refreshWorkspaces() themselves right
+    // after a fresh sign-in, but that path is skipped entirely when the app
+    // is reopened with an already-valid saved token (loggedIn is true from
+    // the very first composition) — without this, currentWorkspace/
+    // workspaces stay empty for the whole session after every normal
+    // "close and reopen the app", hiding Carnê/Cobrança/Dashboard Amparar
+    // from the drawer and the workspace switcher until the user logs out
+    // and back in. Re-running it here on every true transition is harmless
+    // (idempotent GET), it just also covers the resumed-session case.
+    LaunchedEffect(loggedIn) {
+        if (loggedIn) {
+            sessionViewModel.refreshWorkspaces()
         }
     }
 
@@ -118,6 +137,71 @@ fun BussolaNavHost() {
         composable(Screen.Accounts.route) {
             AppScaffold(sessionViewModel, "Contas", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
                 AccountsScreen(modifier = padding)
+            }
+        }
+        composable(Screen.Tasks.route) {
+            AppScaffold(sessionViewModel, "Tarefas", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                TasksListScreen(
+                    modifier = padding,
+                    onAddTask = { navController.navigate(Screen.TaskEdit.route()) },
+                    onOpenTask = { id -> navController.navigate(Screen.TaskEdit.route(id)) },
+                )
+            }
+        }
+        composable(
+            Screen.TaskEdit.route,
+            arguments = listOf(
+                navArgument("id") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = ""
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val id = entry.arguments?.getString("id")?.ifBlank { null }
+            AppScaffold(sessionViewModel, if (id == null) "Nova tarefa" else "Editar tarefa", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                TaskEditScreen(
+                    modifier = padding,
+                    taskId = id,
+                    onSaved = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() },
+                )
+            }
+        }
+        composable(Screen.Calendar.route) {
+            AppScaffold(sessionViewModel, "Calendário", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                CalendarScreen(
+                    modifier = padding,
+                    onAddEvent = { navController.navigate(Screen.CalendarEventEdit.route()) },
+                    onOpenEvent = { id, calendarId -> navController.navigate(Screen.CalendarEventEdit.route(id, calendarId)) },
+                )
+            }
+        }
+        composable(
+            Screen.CalendarEventEdit.route,
+            arguments = listOf(
+                navArgument("id") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = ""
+                    nullable = false
+                },
+                navArgument("calendarId") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = ""
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val id = entry.arguments?.getString("id")?.ifBlank { null }
+            val calendarId = entry.arguments?.getString("calendarId")?.ifBlank { null }
+            AppScaffold(sessionViewModel, if (id == null) "Novo compromisso" else "Editar compromisso", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                CalendarEventEditScreen(
+                    modifier = padding,
+                    eventId = id,
+                    calendarId = calendarId,
+                    onSaved = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() },
+                )
             }
         }
         composable(Screen.Carne.route) {

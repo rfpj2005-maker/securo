@@ -23,7 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/page-header'
-import { Trash2, Pencil, Mic, Plus, ListChecks, Bell, BellOff, BellRing, ChevronDown, ChevronRight } from 'lucide-react'
+import { Trash2, Pencil, Mic, Plus, ListChecks, Bell, BellOff, BellRing, ChevronDown, ChevronRight, Repeat } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '@/contexts/workspace-context'
 import type { Task } from '@/types'
@@ -62,6 +62,18 @@ export default function TasksPage() {
     administrative: t('tasks.categoryAdministrative'),
     meetings: t('tasks.categoryMeetings'),
   }
+  const recurrenceUnitLabel: Record<string, string> = {
+    daily: t('tasks.recurrence.unitDaily', 'dia(s)'),
+    weekly: t('tasks.recurrence.unitWeekly', 'semana(s)'),
+    monthly: t('tasks.recurrence.unitMonthly', 'mês(es)'),
+    yearly: t('tasks.recurrence.unitYearly', 'ano(s)'),
+  }
+  const recurrenceChipLabel: Record<string, string> = {
+    daily: t('tasks.recurrence.chipDaily', 'Diária'),
+    weekly: t('tasks.recurrence.chipWeekly', 'Semanal'),
+    monthly: t('tasks.recurrence.chipMonthly', 'Mensal'),
+    yearly: t('tasks.recurrence.chipYearly', 'Anual'),
+  }
   // Custom categories (anything the user typed that isn't one of the four
   // defaults) don't have a translation — show them back exactly as typed.
   const categoryLabel = (category: string) => knownLabels[category] ?? category
@@ -82,6 +94,9 @@ export default function TasksPage() {
   const [formDueDate, setFormDueDate] = useState('')
   const [formDueTime, setFormDueTime] = useState('')
   const [formNotes, setFormNotes] = useState('')
+  const [formRecurrence, setFormRecurrence] = useState<'' | 'daily' | 'weekly' | 'monthly' | 'yearly'>('')
+  const [formRecurrenceInterval, setFormRecurrenceInterval] = useState('1')
+  const [formRecurrenceEndDate, setFormRecurrenceEndDate] = useState('')
   // 'existing' shows a <select> of known categories (plus "+ new"); 'new'
   // swaps it for a plain text input so a first-time category isn't stuck
   // behind a datalist that's easy to miss on some browsers/mobile.
@@ -118,7 +133,7 @@ export default function TasksPage() {
   const liveEditingTask = editingTask ? (allTasks ?? []).find((t) => t.id === editingTask.id) ?? editingTask : null
 
   const createMutation = useMutation({
-    mutationFn: (data: { title: string; category: string; due_date?: string | null; due_time?: string | null; notes?: string | null }) => tasksApi.create(data),
+    mutationFn: (data: { title: string; category: string; due_date?: string | null; due_time?: string | null; notes?: string | null; recurrence_frequency?: string | null; recurrence_interval?: number; recurrence_end_date?: string | null }) => tasksApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setDialogOpen(false)
@@ -197,6 +212,9 @@ export default function TasksPage() {
     setFormDueDate('')
     setFormDueTime('')
     setFormNotes('')
+    setFormRecurrence('')
+    setFormRecurrenceInterval('1')
+    setFormRecurrenceEndDate('')
     setCategoryMode('existing')
     setNewSubtaskTitle('')
     setEditingSubtaskId(null)
@@ -210,6 +228,9 @@ export default function TasksPage() {
     setFormDueDate(task.due_date ?? '')
     setFormDueTime(task.due_time ? task.due_time.slice(0, 5) : '')
     setFormNotes(task.notes ?? '')
+    setFormRecurrence(task.recurrence_frequency ?? '')
+    setFormRecurrenceInterval(String(task.recurrence_interval || 1))
+    setFormRecurrenceEndDate(task.recurrence_end_date ?? '')
     setCategoryMode('existing')
     setNewSubtaskTitle('')
     setEditingSubtaskId(null)
@@ -218,6 +239,12 @@ export default function TasksPage() {
 
   const handleSave = () => {
     const category = formCategory.trim() || 'administrative'
+    const recurring = formDueDate && formRecurrence
+    const recurrenceFields = {
+      recurrence_frequency: recurring ? formRecurrence : null,
+      recurrence_interval: recurring ? Math.max(1, parseInt(formRecurrenceInterval, 10) || 1) : 1,
+      recurrence_end_date: recurring ? formRecurrenceEndDate || null : null,
+    }
     if (editingTask) {
       updateMutation.mutate({
         id: editingTask.id,
@@ -226,6 +253,7 @@ export default function TasksPage() {
         due_date: formDueDate || null,
         due_time: formDueDate ? formDueTime || null : null,
         notes: formNotes.trim() || null,
+        ...recurrenceFields,
       })
     } else {
       createMutation.mutate({
@@ -234,6 +262,7 @@ export default function TasksPage() {
         due_date: formDueDate || null,
         due_time: formDueDate ? formDueTime || null : null,
         notes: formNotes.trim() || null,
+        ...recurrenceFields,
       })
     }
   }
@@ -269,6 +298,12 @@ export default function TasksPage() {
           <div className="flex flex-wrap items-center gap-2 mt-1">
             <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{categoryLabel(task.category)}</span>
             <span className="text-xs text-muted-foreground">{formatDueDate(task.due_date)}</span>
+            {task.recurrence_frequency && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground" title={recurrenceChipLabel[task.recurrence_frequency]}>
+                <Repeat size={11} />
+                {recurrenceChipLabel[task.recurrence_frequency]}
+              </span>
+            )}
             {task.subtasks.length > 0 && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <ListChecks size={12} />
@@ -459,6 +494,46 @@ export default function TasksPage() {
                   placeholder="08:00"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('tasks.recurrence.label', 'Repetir')}</Label>
+              <select
+                className="w-full border border-border rounded-md px-3 py-2 text-sm bg-card focus:outline-none focus-visible:ring-ring/30 focus-visible:ring-[2px] disabled:opacity-50"
+                value={formRecurrence}
+                disabled={!formDueDate}
+                onChange={(e) => setFormRecurrence(e.target.value as typeof formRecurrence)}
+              >
+                <option value="">{t('tasks.recurrence.none', 'Não repete')}</option>
+                <option value="daily">{t('tasks.recurrence.daily', 'Diariamente')}</option>
+                <option value="weekly">{t('tasks.recurrence.weekly', 'Semanalmente')}</option>
+                <option value="monthly">{t('tasks.recurrence.monthly', 'Mensalmente')}</option>
+                <option value="yearly">{t('tasks.recurrence.yearly', 'Anualmente')}</option>
+              </select>
+              {!formDueDate && (
+                <p className="text-xs text-muted-foreground">{t('tasks.recurrence.needsDueDate', 'Defina uma data para poder repetir — ideal para lembretes de remédio.')}</p>
+              )}
+              {formDueDate && formRecurrence && (
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{t('tasks.recurrence.every', 'A cada')}</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={formRecurrenceInterval}
+                        onChange={(e) => setFormRecurrenceInterval(e.target.value)}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">{recurrenceUnitLabel[formRecurrence]}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">{t('tasks.recurrence.until', 'Repetir até (opcional)')}</Label>
+                    <Input type="date" value={formRecurrenceEndDate} onChange={(e) => setFormRecurrenceEndDate(e.target.value)} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Subtasks — only once the task exists, since they need a task_id */}

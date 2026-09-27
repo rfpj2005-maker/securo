@@ -15,6 +15,7 @@ import {
   subWeeks,
   addMonths,
   subMonths,
+  addHours,
   isSameMonth,
   isToday,
   format,
@@ -102,6 +103,12 @@ export default function CalendarPage() {
   const [formAllDay, setFormAllDay] = useState(false)
   const [formStart, setFormStart] = useState('')
   const [formEnd, setFormEnd] = useState('')
+  // While creating a new event, the end field silently follows the start
+  // field (same day, +1h) until the person edits end themselves — then it
+  // stops following, so a deliberately longer/shorter duration sticks.
+  // Never applies to editing an existing event (its real duration should
+  // never collapse to 1h just because the start got nudged).
+  const [endFollowsStart, setEndFollowsStart] = useState(true)
 
   useEffect(() => {
     if (searchParams.get('google_calendar_connected')) {
@@ -244,6 +251,9 @@ export default function CalendarPage() {
       list.push(ev)
       map.set(key, list)
     }
+    // Now that each pill shows its time, the list needs to read
+    // chronologically top-to-bottom instead of API response order.
+    for (const list of map.values()) list.sort((a, b) => a.start.localeCompare(b.start))
     return map
   }, [events])
 
@@ -260,6 +270,7 @@ export default function CalendarPage() {
     end.setHours(10, 0, 0, 0)
     setFormStart(format(start, "yyyy-MM-dd'T'HH:mm"))
     setFormEnd(format(end, "yyyy-MM-dd'T'HH:mm"))
+    setEndFollowsStart(true)
     setDialogOpen(true)
   }
 
@@ -271,7 +282,26 @@ export default function CalendarPage() {
     setFormAllDay(ev.all_day)
     setFormStart(toDateTimeLocalInput(ev.start, ev.all_day))
     setFormEnd(toDateTimeLocalInput(ev.end, ev.all_day))
+    setEndFollowsStart(false)
     setDialogOpen(true)
+  }
+
+  const handleStartChange = (value: string) => {
+    setFormStart(value)
+    if (!value || editingEvent || !endFollowsStart) return
+    if (formAllDay) {
+      setFormEnd(value)
+      return
+    }
+    const start = new Date(value)
+    if (!Number.isNaN(start.getTime())) {
+      setFormEnd(format(addHours(start, 1), "yyyy-MM-dd'T'HH:mm"))
+    }
+  }
+
+  const handleEndChange = (value: string) => {
+    setEndFollowsStart(false)
+    setFormEnd(value)
   }
 
   const handleSave = () => {
@@ -433,10 +463,15 @@ export default function CalendarPage() {
                             'flex w-full gap-1 text-left text-[11px] px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors',
                             viewMode === 'month' ? 'items-center truncate' : 'items-start',
                           )}
-                          title={ev.calendar_summary ? `${ev.summary} · ${ev.calendar_summary}` : ev.summary}
+                          title={[ev.all_day ? null : format(parseISO(ev.start), 'HH:mm'), ev.summary, ev.calendar_summary].filter(Boolean).join(' · ')}
                         >
                           <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', viewMode !== 'month' && 'mt-1', calendarDotColor(ev.calendar_id))} />
-                          <span className={viewMode === 'month' ? 'truncate' : 'line-clamp-2 break-words'}>{ev.summary}</span>
+                          <span className={viewMode === 'month' ? 'truncate' : 'line-clamp-2 break-words'}>
+                            {viewMode !== 'month' && !ev.all_day && (
+                              <span className="font-mono tabular-nums opacity-75 mr-1">{format(parseISO(ev.start), 'HH:mm')}</span>
+                            )}
+                            {ev.summary}
+                          </span>
                         </button>
                       ))}
                       {dayEvents.length > maxVisible && (
@@ -479,7 +514,7 @@ export default function CalendarPage() {
                 <Input
                   type={formAllDay ? 'date' : 'datetime-local'}
                   value={formStart}
-                  onChange={(e) => setFormStart(e.target.value)}
+                  onChange={(e) => handleStartChange(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -487,7 +522,7 @@ export default function CalendarPage() {
                 <Input
                   type={formAllDay ? 'date' : 'datetime-local'}
                   value={formEnd}
-                  onChange={(e) => setFormEnd(e.target.value)}
+                  onChange={(e) => handleEndChange(e.target.value)}
                 />
               </div>
             </div>

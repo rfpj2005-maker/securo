@@ -311,9 +311,9 @@ async def _get_or_create_oidc_user(
 
     display_name = merged.get("name") or merged.get("preferred_username") or email.split("@", 1)[0]
     preferences = {
-        "language": "en",
+        "language": "pt-BR",
         "date_format": "MM/DD/YYYY",
-        "timezone": "UTC",
+        "timezone": "America/Sao_Paulo",
         "currency_display": settings.default_currency,
         "display_name": display_name,
         "auth_provider": settings.oidc_provider_name,

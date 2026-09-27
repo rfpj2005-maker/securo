@@ -1386,7 +1386,7 @@
     "anyCountry": "Qualquer outro lugar"
   },
   "calendar": {
-    "section": "Configuração",
+    "section": "Produtividade",
     "title": "Calendário",
     "notConnectedDesc": "Conecte seu Google Calendar para ver, criar e editar seus eventos direto no Bússola.",
     "connect": "Conectar Google Calendar",
@@ -1505,7 +1505,7 @@
   },
   "tasks": {
     "title": "Tarefas",
-    "section": "Configuração",
+    "section": "Produtividade",
     "taskTitle": "Título",
     "category": "Categoria",
     "categoryPlaceholder": "Digite ou escolha uma categoria",
@@ -1558,6 +1558,25 @@
       "testFailed": "Não foi possível enviar — tente reativar",
       "activeHint": "Você recebe uma notificação quando uma tarefa vence.",
       "inactiveHint": "Ative para ser avisado quando uma tarefa vencer."
+    },
+    "recurrence": {
+      "label": "Repetir",
+      "none": "Não repete",
+      "daily": "Diariamente",
+      "weekly": "Semanalmente",
+      "monthly": "Mensalmente",
+      "yearly": "Anualmente",
+      "needsDueDate": "Defina uma data para poder repetir — ideal para lembretes de remédio.",
+      "every": "A cada",
+      "until": "Repetir até (opcional)",
+      "unitDaily": "dia(s)",
+      "unitWeekly": "semana(s)",
+      "unitMonthly": "mês(es)",
+      "unitYearly": "ano(s)",
+      "chipDaily": "Diária",
+      "chipWeekly": "Semanal",
+      "chipMonthly": "Mensal",
+      "chipYearly": "Anual"
     }
   },
   "common": {

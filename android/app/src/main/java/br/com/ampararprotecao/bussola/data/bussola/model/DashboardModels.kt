@@ -26,7 +26,10 @@ data class DashboardSummary(
 
 @Serializable
 data class SpendingByCategory(
-    @SerialName("category_id") val categoryId: String,
+    // Nullable — backend's "Sem categoria" bucket (uncategorized spending)
+    // legitimately sends null here (see backend/app/schemas/dashboard.py's
+    // SpendingByCategory.category_id: Optional[str]).
+    @SerialName("category_id") val categoryId: String? = null,
     @SerialName("category_name") val categoryName: String,
     @SerialName("category_icon") val categoryIcon: String? = null,
     @SerialName("category_color") val categoryColor: String? = null,

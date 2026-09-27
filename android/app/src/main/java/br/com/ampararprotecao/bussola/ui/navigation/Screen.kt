@@ -19,6 +19,11 @@ sealed class Screen(val route: String) {
         fun route(id: String? = null, calendarId: String? = null) =
             "calendar_event_edit?id=${id ?: ""}&calendarId=${calendarId ?: ""}"
     }
+    data object Cameras : Screen("cameras")
+    data object CameraDetail : Screen("camera_detail/{location}/{cameraId}?name={name}") {
+        fun route(location: String, cameraId: Int, name: String) =
+            "camera_detail/$location/$cameraId?name=${java.net.URLEncoder.encode(name, "UTF-8")}"
+    }
     data object Carne : Screen("carne")
     data object Cobranca : Screen("cobranca")
     data object PainelDashboard : Screen("painel_dashboard")
@@ -43,6 +48,7 @@ val DRAWER_ITEMS = listOf(
     DrawerItem(Screen.Accounts, "Contas", featureId = null),
     DrawerItem(Screen.Tasks, "Tarefas", featureId = "tasks"),
     DrawerItem(Screen.Calendar, "Calendário", featureId = "calendar"),
+    DrawerItem(Screen.Cameras, "Câmeras", featureId = "cameras"),
     DrawerItem(Screen.Carne, "Carnê", featureId = "pa_carne", requiresPainelAmparar = true),
     DrawerItem(Screen.Cobranca, "Cobrança", featureId = "pa_cobranca", requiresPainelAmparar = true),
     DrawerItem(Screen.PainelDashboard, "Dashboard Amparar", featureId = "pa_dashboard", requiresPainelAmparar = true),

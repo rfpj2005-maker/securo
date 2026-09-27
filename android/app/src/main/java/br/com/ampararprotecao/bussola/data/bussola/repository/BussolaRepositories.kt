@@ -3,12 +3,15 @@ package br.com.ampararprotecao.bussola.data.bussola.repository
 import br.com.ampararprotecao.bussola.data.BussolaTokenStore
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAccountsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCalendarApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCamerasApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCategoriesApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaDashboardApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTasksApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaTransactionsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaWorkspacesApi
 import br.com.ampararprotecao.bussola.data.bussola.model.Account
+import br.com.ampararprotecao.bussola.data.bussola.model.Camera
+import br.com.ampararprotecao.bussola.data.bussola.model.CameraRecording
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventRead
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventUpdate
@@ -111,4 +114,15 @@ class BussolaCalendarRepository @Inject constructor(private val api: BussolaCale
     suspend fun updateEvent(id: String, calendarId: String, body: CalendarEventUpdate): CalendarEventRead =
         api.updateEvent(id, calendarId, body)
     suspend fun deleteEvent(id: String, calendarId: String) = api.deleteEvent(id, calendarId)
+}
+
+@Singleton
+class BussolaCamerasRepository @Inject constructor(private val api: BussolaCamerasApi) {
+    suspend fun list(): List<Camera> = api.list()
+    suspend fun snapshot(location: String, cameraId: Int): ByteArray = api.snapshot(location, cameraId).bytes()
+    suspend fun recordings(location: String, cameraName: String): List<CameraRecording> = api.recordings(location, cameraName)
+    suspend fun search(location: String, cameraName: String, date: String?, timeFrom: String?, timeTo: String?): List<CameraRecording> =
+        api.search(location, cameraName, date, timeFrom, timeTo)
+    suspend fun recordingBytes(location: String, cameraName: String, filename: String): ByteArray =
+        api.recording(location, cameraName, filename).bytes()
 }

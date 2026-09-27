@@ -3,6 +3,7 @@ package br.com.ampararprotecao.bussola.di
 import br.com.ampararprotecao.bussola.data.BussolaTokenStore
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAccountsApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaAuthApi
+import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCamerasApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCalendarApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaCategoriesApi
 import br.com.ampararprotecao.bussola.data.bussola.api.BussolaDashboardApi
@@ -146,6 +147,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideBussolaCalendarApi(@BussolaRetrofit retrofit: Retrofit): BussolaCalendarApi = retrofit.create(BussolaCalendarApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBussolaCamerasApi(@BussolaRetrofit retrofit: Retrofit): BussolaCamerasApi = retrofit.create(BussolaCamerasApi::class.java)
 
     @Provides
     @Singleton

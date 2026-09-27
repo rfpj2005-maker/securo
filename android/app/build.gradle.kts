@@ -104,6 +104,10 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
+    // Video playback for camera recordings (ui/cameras).
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
+
     // Encrypted local storage for the Bússola JWT + Painel Amparar cookie.
     // Stable 1.1.0 (not the old 1.1.0-alpha06) — the alpha had known
     // AndroidKeyStore crashes on some devices (Samsung One UI included)

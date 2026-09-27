@@ -1,6 +1,8 @@
 package br.com.ampararprotecao.bussola.data.bussola.api
 
 import br.com.ampararprotecao.bussola.data.bussola.model.Account
+import br.com.ampararprotecao.bussola.data.bussola.model.Camera
+import br.com.ampararprotecao.bussola.data.bussola.model.CameraRecording
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventRead
 import br.com.ampararprotecao.bussola.data.bussola.model.CalendarEventUpdate
@@ -23,6 +25,7 @@ import br.com.ampararprotecao.bussola.data.bussola.model.TwoFactorVerifyRequest
 import br.com.ampararprotecao.bussola.data.bussola.model.UserRead
 import br.com.ampararprotecao.bussola.data.bussola.model.WorkspaceMember
 import br.com.ampararprotecao.bussola.data.bussola.model.WorkspaceRead
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.Field
@@ -162,4 +165,33 @@ interface BussolaCalendarApi {
 
     @DELETE("integrations/google-calendar/events/{id}")
     suspend fun deleteEvent(@Path("id") id: String, @Query("calendar_id") calendarId: String)
+}
+
+interface BussolaCamerasApi {
+    @GET("cameras")
+    suspend fun list(): List<Camera>
+
+    @retrofit2.http.Streaming
+    @GET("cameras/snapshot/{location}/{cameraId}")
+    suspend fun snapshot(@Path("location") location: String, @Path("cameraId") cameraId: Int): ResponseBody
+
+    @GET("cameras/recordings/{location}/{cameraName}")
+    suspend fun recordings(@Path("location") location: String, @Path("cameraName") cameraName: String): List<CameraRecording>
+
+    @GET("cameras/search/{location}/{cameraName}")
+    suspend fun search(
+        @Path("location") location: String,
+        @Path("cameraName") cameraName: String,
+        @Query("date") date: String? = null,
+        @Query("time_from") timeFrom: String? = null,
+        @Query("time_to") timeTo: String? = null,
+    ): List<CameraRecording>
+
+    @retrofit2.http.Streaming
+    @GET("cameras/recording/{location}/{cameraName}/{filename}")
+    suspend fun recording(
+        @Path("location") location: String,
+        @Path("cameraName") cameraName: String,
+        @Path("filename") filename: String,
+    ): ResponseBody
 }

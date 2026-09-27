@@ -19,6 +19,8 @@ import br.com.ampararprotecao.bussola.ui.SessionViewModel
 import br.com.ampararprotecao.bussola.ui.accounts.AccountsScreen
 import br.com.ampararprotecao.bussola.ui.calendar.CalendarEventEditScreen
 import br.com.ampararprotecao.bussola.ui.calendar.CalendarScreen
+import br.com.ampararprotecao.bussola.ui.cameras.CameraDetailScreen
+import br.com.ampararprotecao.bussola.ui.cameras.CamerasListScreen
 import br.com.ampararprotecao.bussola.ui.carne.CarneScreen
 import br.com.ampararprotecao.bussola.ui.cobranca.CobrancaScreen
 import br.com.ampararprotecao.bussola.ui.components.AppScaffold
@@ -202,6 +204,33 @@ fun BussolaNavHost() {
                     onSaved = { navController.popBackStack() },
                     onDeleted = { navController.popBackStack() },
                 )
+            }
+        }
+        composable(Screen.Cameras.route) {
+            AppScaffold(sessionViewModel, "Câmeras", currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                CamerasListScreen(
+                    modifier = padding,
+                    onOpenCamera = { location, id, name -> navController.navigate(Screen.CameraDetail.route(location, id, name)) },
+                )
+            }
+        }
+        composable(
+            Screen.CameraDetail.route,
+            arguments = listOf(
+                navArgument("location") { type = androidx.navigation.NavType.StringType },
+                navArgument("cameraId") { type = androidx.navigation.NavType.IntType },
+                navArgument("name") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = ""
+                    nullable = false
+                },
+            ),
+        ) { entry ->
+            val location = entry.arguments?.getString("location") ?: ""
+            val cameraId = entry.arguments?.getInt("cameraId") ?: 0
+            val name = entry.arguments?.getString("name") ?: ""
+            AppScaffold(sessionViewModel, name.ifBlank { "Câmera" }, currentRoute, onNavigate = { navController.navigate(it.route) }, onLogout = { sessionViewModel.logout() }) { padding ->
+                CameraDetailScreen(modifier = padding, location = location, cameraId = cameraId, cameraName = name)
             }
         }
         composable(Screen.Carne.route) {

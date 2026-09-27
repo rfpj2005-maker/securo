@@ -69,6 +69,8 @@ fun BussolaTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        shapes = BussolaShapes,
+        typography = BussolaTypography,
         content = content,
     )
 }

@@ -23,6 +23,11 @@ data class LoginResponse(
 )
 
 @Serializable
+data class ForgotPasswordRequest(
+    @SerialName("email") val email: String,
+)
+
+@Serializable
 data class TwoFactorVerifyRequest(
     @SerialName("temp_token") val tempToken: String,
     @SerialName("code") val code: String,

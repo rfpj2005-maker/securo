@@ -15,6 +15,7 @@ import br.com.ampararprotecao.bussola.data.bussola.model.CategoryCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.CategoryGroup
 import br.com.ampararprotecao.bussola.data.bussola.model.CategoryUpdate
 import br.com.ampararprotecao.bussola.data.bussola.model.DashboardSummary
+import br.com.ampararprotecao.bussola.data.bussola.model.ForgotPasswordRequest
 import br.com.ampararprotecao.bussola.data.bussola.model.Goal
 import br.com.ampararprotecao.bussola.data.bussola.model.GoalCreate
 import br.com.ampararprotecao.bussola.data.bussola.model.GoalUpdate
@@ -61,6 +62,9 @@ interface BussolaAuthApi {
 
     @GET("users/me")
     suspend fun me(): UserRead
+
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(@Body body: ForgotPasswordRequest)
 }
 
 interface BussolaWorkspacesApi {

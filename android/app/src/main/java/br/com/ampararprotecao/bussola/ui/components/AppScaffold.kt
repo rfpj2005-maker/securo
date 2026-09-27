@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.DrawerValue
@@ -13,6 +14,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -24,14 +26,17 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import br.com.ampararprotecao.bussola.ui.SessionViewModel
 import br.com.ampararprotecao.bussola.ui.navigation.DRAWER_ITEMS
+import br.com.ampararprotecao.bussola.ui.navigation.DrawerItem
 import br.com.ampararprotecao.bussola.ui.navigation.Screen
 import kotlinx.coroutines.launch
 
@@ -107,16 +112,52 @@ fun AppScaffold(
                         style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     )
                 }
+                val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+                val renderedGroups = remember { mutableSetOf<String>() }
+                renderedGroups.clear()
                 visibleItems.forEach { item ->
-                    NavigationDrawerItem(
-                        label = { Text(item.labelPtBr) },
-                        selected = currentRoute == item.screen.route,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onNavigate(item.screen)
-                        },
-                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    )
+                    val group = item.groupLabel
+                    if (group == null) {
+                        NavigationDrawerItem(
+                            label = { Text(item.labelPtBr) },
+                            selected = currentRoute == item.screen.route,
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                onNavigate(item.screen)
+                            },
+                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
+                        )
+                    } else if (renderedGroups.add(group)) {
+                        val children = visibleItems.filter { it.groupLabel == group }
+                        val autoExpand = children.any { it.screen.route == currentRoute }
+                        val expanded = expandedGroups[group] ?: autoExpand
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { expandedGroups[group] = !expanded }
+                                .padding(horizontal = 28.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(group, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            Icon(
+                                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = if (expanded) "Recolher" else "Expandir",
+                            )
+                        }
+                        if (expanded) {
+                            children.forEach { child ->
+                                NavigationDrawerItem(
+                                    label = { Text(child.labelPtBr) },
+                                    selected = currentRoute == child.screen.route,
+                                    onClick = {
+                                        scope.launch { drawerState.close() }
+                                        onNavigate(child.screen)
+                                    },
+                                    modifier = Modifier.padding(start = 16.dp, end = 12.dp),
+                                )
+                            }
+                        }
+                    }
                 }
                 NavigationDrawerItem(
                     label = { Text("Sair") },

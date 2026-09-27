@@ -39,5 +39,9 @@ class BussolaAuthRepository @Inject constructor(
         return resolved
     }
 
+    suspend fun forgotPassword(email: String) = authApi.forgotPassword(
+        br.com.ampararprotecao.bussola.data.bussola.model.ForgotPasswordRequest(email),
+    )
+
     fun logout() = tokenStore.clear()
 }

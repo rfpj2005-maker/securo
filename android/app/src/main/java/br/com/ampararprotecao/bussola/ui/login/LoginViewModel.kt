@@ -61,4 +61,14 @@ class LoginViewModel @Inject constructor(
     fun resetError() {
         if (_state.value is LoginUiState.Error) _state.value = LoginUiState.Idle
     }
+
+    fun forgotPassword(email: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            runCatching { authRepository.forgotPassword(email) }
+            // Same behavior as web either way — never reveal whether the
+            // email is registered, so a failure here still shows "check
+            // your email" rather than an error.
+            onDone()
+        }
+    }
 }

@@ -3,6 +3,7 @@ package br.com.ampararprotecao.bussola.ui.navigation
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
     data object TwoFactor : Screen("two_factor")
+    data object ForgotPassword : Screen("forgot_password")
 
     data object Dashboard : Screen("dashboard")
     data object Transactions : Screen("transactions")
@@ -48,21 +49,25 @@ data class DrawerItem(
     val moduleId: String? = null,
     val requiresPainelAmparar: Boolean = false,
     val requiresSuperuser: Boolean = false,
+    // Web nests finance pages under a collapsible "Finanças" section and
+    // Painel Amparar's own modules under its own — null means a flat
+    // top-level item (Dashboard, Tarefas, Calendário, ...), same as web.
+    val groupLabel: String? = null,
 )
 
 val DRAWER_ITEMS = listOf(
     DrawerItem(Screen.Dashboard, "Dashboard", featureId = null),
-    DrawerItem(Screen.Transactions, "Transações", featureId = null),
-    DrawerItem(Screen.Accounts, "Contas", featureId = null),
-    DrawerItem(Screen.Categories, "Categorias", featureId = null, moduleId = "categories"),
-    DrawerItem(Screen.Budgets, "Orçamentos", featureId = null, moduleId = "budgets"),
-    DrawerItem(Screen.Goals, "Metas", featureId = null, moduleId = "goals"),
-    DrawerItem(Screen.Recurring, "Recorrentes", featureId = null, moduleId = "recurring"),
+    DrawerItem(Screen.Transactions, "Transações", featureId = null, groupLabel = "Finanças"),
+    DrawerItem(Screen.Accounts, "Contas", featureId = null, groupLabel = "Finanças"),
+    DrawerItem(Screen.Categories, "Categorias", featureId = null, moduleId = "categories", groupLabel = "Finanças"),
+    DrawerItem(Screen.Budgets, "Orçamentos", featureId = null, moduleId = "budgets", groupLabel = "Finanças"),
+    DrawerItem(Screen.Goals, "Metas", featureId = null, moduleId = "goals", groupLabel = "Finanças"),
+    DrawerItem(Screen.Recurring, "Recorrentes", featureId = null, moduleId = "recurring", groupLabel = "Finanças"),
     DrawerItem(Screen.Tasks, "Tarefas", featureId = "tasks"),
     DrawerItem(Screen.Calendar, "Calendário", featureId = "calendar"),
     DrawerItem(Screen.Cameras, "Câmeras", featureId = "cameras"),
-    DrawerItem(Screen.Carne, "Carnê", featureId = "pa_carne", requiresPainelAmparar = true),
-    DrawerItem(Screen.Cobranca, "Cobrança", featureId = "pa_cobranca", requiresPainelAmparar = true),
-    DrawerItem(Screen.PainelDashboard, "Dashboard Amparar", featureId = "pa_dashboard", requiresPainelAmparar = true),
+    DrawerItem(Screen.Carne, "Carnê", featureId = "pa_carne", requiresPainelAmparar = true, groupLabel = "Painel Amparar"),
+    DrawerItem(Screen.Cobranca, "Cobrança", featureId = "pa_cobranca", requiresPainelAmparar = true, groupLabel = "Painel Amparar"),
+    DrawerItem(Screen.PainelDashboard, "Dashboard Amparar", featureId = "pa_dashboard", requiresPainelAmparar = true, groupLabel = "Painel Amparar"),
     DrawerItem(Screen.Permissions, "Permissões", featureId = null, requiresSuperuser = true),
 )

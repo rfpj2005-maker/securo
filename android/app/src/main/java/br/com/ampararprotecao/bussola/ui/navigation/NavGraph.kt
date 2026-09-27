@@ -97,6 +97,12 @@ fun BussolaNavHost() {
                     navController.navigate(Screen.TwoFactor.route)
                 },
                 onLoggedIn = { goMain(Screen.Dashboard) },
+                onForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
+            )
+        }
+        composable(Screen.ForgotPassword.route) {
+            br.com.ampararprotecao.bussola.ui.login.ForgotPasswordScreen(
+                onBackToLogin = { navController.popBackStack() },
             )
         }
         composable(Screen.TwoFactor.route) {

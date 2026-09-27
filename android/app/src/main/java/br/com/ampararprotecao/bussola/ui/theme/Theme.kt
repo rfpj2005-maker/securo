@@ -29,6 +29,8 @@ private val LightColors = lightColorScheme(
     outline = OutlineLight,
     error = Color(0xFFF43F5E),
     onError = Color.White,
+    errorContainer = AccentLight,
+    onErrorContainer = OnAccentLight,
 )
 private val DarkColors = darkColorScheme(
     primary = PrimaryDark,
@@ -47,6 +49,8 @@ private val DarkColors = darkColorScheme(
     outline = OutlineDark,
     error = Color(0xFFFB7185),
     onError = BackgroundDark,
+    errorContainer = AccentDark,
+    onErrorContainer = OnAccentDark,
 )
 
 @Composable

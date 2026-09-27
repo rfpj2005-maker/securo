@@ -18,14 +18,45 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.AutofillNode
+import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalAutofill
+import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import br.com.ampararprotecao.bussola.ui.SessionViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+// Password managers (1Password included) hook into Android's Autofill
+// Framework, not just "any text field" — without a field explicitly
+// registered as Username/Password (via an AutofillNode + the `autofill`
+// modifier below), the framework never tells them this screen has
+// anything fillable, so the suggestion chip never appears. This is the
+// pre-1.8 Compose API (BOM here is 2024.06.00 / Compose UI 1.6.x, before
+// the newer semantics-based `contentType` autofill landed) — same idea,
+// more boilerplate: register a node with its field's bounding box, and
+// request/cancel autofill as that field gains/loses focus.
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun autofillModifier(autofillTypes: List<AutofillType>, onFill: (String) -> Unit): Modifier {
+    val autofill = LocalAutofill.current
+    val autofillTree = LocalAutofillTree.current
+    val node = remember { AutofillNode(autofillTypes = autofillTypes, onFill = onFill) }
+    autofillTree += node
+    return Modifier
+        .onGloballyPositioned { node.boundingBox = it.boundsInWindow() }
+        .onFocusChanged { focusState ->
+            if (focusState.isFocused) autofill?.requestAutofillForNode(node) else autofill?.cancelAutofillForNode(node)
+        }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     sessionViewModel: SessionViewModel,
@@ -64,7 +95,9 @@ fun LoginScreen(
             onValueChange = { username = it; viewModel.resetError() },
             label = { Text("E-mail") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(autofillModifier(listOf(AutofillType.Username, AutofillType.EmailAddress)) { username = it }),
             singleLine = true,
         )
         androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
@@ -74,7 +107,9 @@ fun LoginScreen(
             label = { Text("Senha") },
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(autofillModifier(listOf(AutofillType.Password)) { password = it }),
             singleLine = true,
         )
 

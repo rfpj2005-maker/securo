@@ -29,6 +29,9 @@ class Vehicle(Base):
     # Odometer reading when the vehicle was registered here. The current
     # reading is derived from the highest odometer among its records.
     initial_odometer: Mapped[int] = mapped_column(Integer, default=0)
+    tank_capacity: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=8, scale=2), nullable=True)
+    chassis: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    renavam: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -38,6 +41,12 @@ class Vehicle(Base):
         back_populates="vehicle", cascade="all, delete-orphan", passive_deletes=True
     )
     reminders: Mapped[list["VehicleReminder"]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan", passive_deletes=True
+    )
+    trips: Mapped[list["VehicleTrip"]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan", passive_deletes=True
+    )
+    inspections: Mapped[list["VehicleInspection"]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -63,6 +72,14 @@ class VehicleRecord(Base):
     liters: Mapped[Optional[Decimal]] = mapped_column(Numeric(precision=10, scale=3), nullable=True)
     full_tank: Mapped[bool] = mapped_column(Boolean, default=True)
     description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    driver: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    place: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)  # gas station / workshop
+    payment_method: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    purpose: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g. work, personal use
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Stable key of the row this came from in an external app (Drivvo), so
+    # re-importing the same export skips what is already here.
+    external_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     vehicle: Mapped["Vehicle"] = relationship(back_populates="records")
@@ -87,3 +104,72 @@ class VehicleReminder(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     vehicle: Mapped["Vehicle"] = relationship(back_populates="reminders")
+
+
+class VehicleTrip(Base):
+    """A journey: who drove, from where to where, and the odometer at each end."""
+
+    __tablename__ = "vehicle_trips"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
+    start_odometer: Mapped[int] = mapped_column(Integer)
+    end_odometer: Mapped[int] = mapped_column(Integer)
+    origin: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    destination: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
+    driver: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    purpose: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    vehicle: Mapped["Vehicle"] = relationship(back_populates="trips")
+
+    @property
+    def distance(self) -> int:
+        return max(self.end_odometer - self.start_odometer, 0)
+
+
+class VehicleInspection(Base):
+    """Daily pre-use checklist filled in by the driver."""
+
+    __tablename__ = "vehicle_inspections"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vehicle_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("vehicles.id", ondelete="CASCADE"), index=True
+    )
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True
+    )
+    inspected_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    odometer: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    driver: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # None = not answered.
+    documents_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    tires_ok: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    coolant_checked: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    failing_items: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    other_problem: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    vehicle: Mapped["Vehicle"] = relationship(back_populates="inspections")
+
+    @property
+    def has_issue(self) -> bool:
+        return (
+            self.documents_ok is False
+            or self.tires_ok is False
+            or self.coolant_checked is False
+            or bool(self.failing_items)
+            or bool(self.other_problem)
+        )

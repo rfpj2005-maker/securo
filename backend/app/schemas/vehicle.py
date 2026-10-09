@@ -3,7 +3,7 @@ from datetime import date as _Date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 FUEL_TYPES = ("flex", "gasoline", "ethanol", "diesel", "cng", "electric", "hybrid")
 RECORD_KINDS = ("fuel", "maintenance", "expense")
@@ -40,6 +40,9 @@ class VehicleCreate(BaseModel):
     color: Optional[str] = Field(None, max_length=30)
     fuel_type: str = "flex"
     initial_odometer: int = Field(0, ge=0)
+    tank_capacity: Optional[Decimal] = Field(None, gt=0)
+    chassis: Optional[str] = Field(None, max_length=30)
+    renavam: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     is_active: bool = True
 
@@ -63,6 +66,9 @@ class VehicleUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=30)
     fuel_type: Optional[str] = None
     initial_odometer: Optional[int] = Field(None, ge=0)
+    tank_capacity: Optional[Decimal] = Field(None, gt=0)
+    chassis: Optional[str] = Field(None, max_length=30)
+    renavam: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -91,6 +97,11 @@ class VehicleStats(BaseModel):
     cost_per_km: Optional[Decimal] = None
     pending_reminders: int
     overdue_reminders: int
+    trip_count: int = 0
+    # Inspections where the driver flagged something (document missing,
+    # tyres, coolant, broken items) — the latest one per vehicle matters most.
+    last_inspection_at: Optional[datetime] = None
+    last_inspection_has_issue: bool = False
 
 
 class VehicleRead(BaseModel):
@@ -104,6 +115,9 @@ class VehicleRead(BaseModel):
     color: Optional[str] = None
     fuel_type: str
     initial_odometer: int
+    tank_capacity: Optional[Decimal] = None
+    chassis: Optional[str] = None
+    renavam: Optional[str] = None
     notes: Optional[str] = None
     is_active: bool
     created_at: datetime
@@ -124,6 +138,11 @@ class VehicleRecordCreate(BaseModel):
     liters: Optional[Decimal] = Field(None, gt=0)
     full_tank: bool = True
     description: Optional[str] = Field(None, max_length=255)
+    driver: Optional[str] = Field(None, max_length=100)
+    place: Optional[str] = Field(None, max_length=150)
+    payment_method: Optional[str] = Field(None, max_length=80)
+    purpose: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
 
     @field_validator("kind")
     @classmethod
@@ -139,6 +158,11 @@ class VehicleRecordUpdate(BaseModel):
     liters: Optional[Decimal] = Field(None, gt=0)
     full_tank: Optional[bool] = None
     description: Optional[str] = Field(None, max_length=255)
+    driver: Optional[str] = Field(None, max_length=100)
+    place: Optional[str] = Field(None, max_length=150)
+    payment_method: Optional[str] = Field(None, max_length=80)
+    purpose: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
 
     @field_validator("kind")
     @classmethod
@@ -156,6 +180,11 @@ class VehicleRecordRead(BaseModel):
     liters: Optional[Decimal] = None
     full_tank: bool
     description: Optional[str] = None
+    driver: Optional[str] = None
+    place: Optional[str] = None
+    payment_method: Optional[str] = None
+    purpose: Optional[str] = None
+    notes: Optional[str] = None
     # km/L for this fill-up, when it closes a full-tank interval.
     consumption: Optional[Decimal] = None
     created_at: datetime
@@ -191,3 +220,117 @@ class VehicleReminderRead(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Trips ------------------------------------------------------------------
+
+
+class VehicleTripCreate(BaseModel):
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    start_odometer: int = Field(..., ge=0)
+    end_odometer: int = Field(..., ge=0)
+    origin: Optional[str] = Field(None, max_length=150)
+    destination: Optional[str] = Field(None, max_length=150)
+    driver: Optional[str] = Field(None, max_length=100)
+    purpose: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def check_odometers(self) -> "VehicleTripCreate":
+        if self.end_odometer < self.start_odometer:
+            raise ValueError("end_odometer must be greater than or equal to start_odometer")
+        return self
+
+
+class VehicleTripUpdate(BaseModel):
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    start_odometer: Optional[int] = Field(None, ge=0)
+    end_odometer: Optional[int] = Field(None, ge=0)
+    origin: Optional[str] = Field(None, max_length=150)
+    destination: Optional[str] = Field(None, max_length=150)
+    driver: Optional[str] = Field(None, max_length=100)
+    purpose: Optional[str] = Field(None, max_length=50)
+    notes: Optional[str] = None
+
+
+class VehicleTripRead(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    start_odometer: int
+    end_odometer: int
+    distance: int
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    driver: Optional[str] = None
+    purpose: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Inspections ------------------------------------------------------------
+
+
+class VehicleInspectionCreate(BaseModel):
+    inspected_at: datetime
+    odometer: Optional[int] = Field(None, ge=0)
+    driver: Optional[str] = Field(None, max_length=100)
+    documents_ok: Optional[bool] = None
+    tires_ok: Optional[bool] = None
+    coolant_checked: Optional[bool] = None
+    failing_items: Optional[str] = Field(None, max_length=255)
+    other_problem: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VehicleInspectionUpdate(BaseModel):
+    inspected_at: Optional[datetime] = None
+    odometer: Optional[int] = Field(None, ge=0)
+    driver: Optional[str] = Field(None, max_length=100)
+    documents_ok: Optional[bool] = None
+    tires_ok: Optional[bool] = None
+    coolant_checked: Optional[bool] = None
+    failing_items: Optional[str] = Field(None, max_length=255)
+    other_problem: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VehicleInspectionRead(BaseModel):
+    id: uuid.UUID
+    vehicle_id: uuid.UUID
+    inspected_at: datetime
+    odometer: Optional[int] = None
+    driver: Optional[str] = None
+    documents_ok: Optional[bool] = None
+    tires_ok: Optional[bool] = None
+    coolant_checked: Optional[bool] = None
+    failing_items: Optional[str] = None
+    other_problem: Optional[str] = None
+    notes: Optional[str] = None
+    has_issue: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Import -----------------------------------------------------------------
+
+
+class VehicleImportSectionResult(BaseModel):
+    created: int = 0
+    skipped: int = 0  # already imported earlier (same external_id)
+
+
+class VehicleImportResult(BaseModel):
+    dry_run: bool
+    vehicles_created: list[str] = []
+    vehicles_matched: list[str] = []
+    records: VehicleImportSectionResult = VehicleImportSectionResult()
+    trips: VehicleImportSectionResult = VehicleImportSectionResult()
+    inspections: VehicleImportSectionResult = VehicleImportSectionResult()
+    warnings: list[str] = []

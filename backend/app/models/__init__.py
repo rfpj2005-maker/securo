@@ -28,7 +28,7 @@ from app.models.task import Task
 from app.models.subtask import Subtask
 from app.models.google_calendar_connection import GoogleCalendarConnection
 from app.models.meeting import Meeting
-from app.models.vehicle import Vehicle, VehicleRecord, VehicleReminder
+from app.models.vehicle import Vehicle, VehicleInspection, VehicleRecord, VehicleReminder, VehicleTrip
 
 # Side-effect import: register the before_insert listener that auto-stamps
 # workspace_id from user_id on financial entities. Imported last so all
@@ -74,4 +74,6 @@ __all__ = [
     "Vehicle",
     "VehicleRecord",
     "VehicleReminder",
+    "VehicleTrip",
+    "VehicleInspection",
 ]

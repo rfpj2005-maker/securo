@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_async_session
@@ -9,8 +9,13 @@ from app.core.workspace_context import (
     current_workspace,
     current_writable_workspace,
 )
+from app.models.vehicle import VehicleInspection, VehicleTrip
 from app.schemas.vehicle import (
     VehicleCreate,
+    VehicleImportResult,
+    VehicleInspectionCreate,
+    VehicleInspectionRead,
+    VehicleInspectionUpdate,
     VehicleRead,
     VehicleRecordCreate,
     VehicleRecordRead,
@@ -18,13 +23,17 @@ from app.schemas.vehicle import (
     VehicleReminderCreate,
     VehicleReminderRead,
     VehicleReminderUpdate,
+    VehicleTripCreate,
+    VehicleTripRead,
+    VehicleTripUpdate,
     VehicleUpdate,
 )
-from app.services import vehicle_service
+from app.services import drivvo_import_service, vehicle_service
 
 router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
 _VEHICLE_NOT_FOUND = "Vehicle not found"
+_MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 
 async def _load_vehicle(session: AsyncSession, vehicle_id: uuid.UUID, workspace_id: uuid.UUID):
@@ -32,6 +41,28 @@ async def _load_vehicle(session: AsyncSession, vehicle_id: uuid.UUID, workspace_
     if not vehicle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_VEHICLE_NOT_FOUND)
     return vehicle
+
+
+# --- Import -----------------------------------------------------------------
+
+
+@router.post("/import/drivvo", response_model=VehicleImportResult)
+async def import_drivvo(
+    file: UploadFile = File(...),
+    dry_run: bool = Query(False),
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """Import a Drivvo "REPORTS_DRIVVO.csv" export. `dry_run` previews counts without saving."""
+    raw = await file.read(_MAX_IMPORT_BYTES + 1)
+    if len(raw) > _MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large")
+    try:
+        return await drivvo_import_service.import_drivvo(
+            session, ctx.workspace.id, ctx.user_id, raw, dry_run=dry_run
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # --- Vehicles ---------------------------------------------------------------
@@ -201,3 +232,110 @@ async def delete_reminder(
 ):
     if not await vehicle_service.delete_reminder(session, vehicle_id, reminder_id, ctx.workspace.id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+
+
+# --- Trips ------------------------------------------------------------------
+
+
+@router.get("/{vehicle_id}/trips", response_model=list[VehicleTripRead])
+async def list_trips(
+    vehicle_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(current_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    return vehicle_service.trips_sorted(await _load_vehicle(session, vehicle_id, ctx.workspace.id))
+
+
+@router.post("/{vehicle_id}/trips", response_model=VehicleTripRead, status_code=status.HTTP_201_CREATED)
+async def create_trip(
+    vehicle_id: uuid.UUID,
+    data: VehicleTripCreate,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    trip = await vehicle_service.create_trip(session, vehicle_id, ctx.workspace.id, data)
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_VEHICLE_NOT_FOUND)
+    return trip
+
+
+@router.patch("/{vehicle_id}/trips/{trip_id}", response_model=VehicleTripRead)
+async def update_trip(
+    vehicle_id: uuid.UUID,
+    trip_id: uuid.UUID,
+    data: VehicleTripUpdate,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    try:
+        trip = await vehicle_service.update_trip(session, vehicle_id, trip_id, ctx.workspace.id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if not trip:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+    return trip
+
+
+@router.delete("/{vehicle_id}/trips/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trip(
+    vehicle_id: uuid.UUID,
+    trip_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    if not await vehicle_service.delete_child(session, VehicleTrip, vehicle_id, trip_id, ctx.workspace.id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
+
+
+# --- Inspections ------------------------------------------------------------
+
+
+@router.get("/{vehicle_id}/inspections", response_model=list[VehicleInspectionRead])
+async def list_inspections(
+    vehicle_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(current_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    return vehicle_service.inspections_sorted(await _load_vehicle(session, vehicle_id, ctx.workspace.id))
+
+
+@router.post(
+    "/{vehicle_id}/inspections", response_model=VehicleInspectionRead, status_code=status.HTTP_201_CREATED
+)
+async def create_inspection(
+    vehicle_id: uuid.UUID,
+    data: VehicleInspectionCreate,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    inspection = await vehicle_service.create_inspection(session, vehicle_id, ctx.workspace.id, data)
+    if not inspection:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_VEHICLE_NOT_FOUND)
+    return inspection
+
+
+@router.patch("/{vehicle_id}/inspections/{inspection_id}", response_model=VehicleInspectionRead)
+async def update_inspection(
+    vehicle_id: uuid.UUID,
+    inspection_id: uuid.UUID,
+    data: VehicleInspectionUpdate,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    inspection = await vehicle_service.update_inspection(session, vehicle_id, inspection_id, ctx.workspace.id, data)
+    if not inspection:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")
+    return inspection
+
+
+@router.delete("/{vehicle_id}/inspections/{inspection_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_inspection(
+    vehicle_id: uuid.UUID,
+    inspection_id: uuid.UUID,
+    ctx: WorkspaceContext = Depends(current_writable_workspace),
+    session: AsyncSession = Depends(get_async_session),
+):
+    if not await vehicle_service.delete_child(
+        session, VehicleInspection, vehicle_id, inspection_id, ctx.workspace.id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inspection not found")

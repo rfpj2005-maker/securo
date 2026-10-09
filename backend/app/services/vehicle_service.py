@@ -7,9 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.vehicle import Vehicle, VehicleRecord, VehicleReminder
+from app.models.vehicle import Vehicle, VehicleInspection, VehicleRecord, VehicleReminder, VehicleTrip
 from app.schemas.vehicle import (
     VehicleCreate,
+    VehicleInspectionCreate,
+    VehicleInspectionUpdate,
     VehicleRead,
     VehicleRecordCreate,
     VehicleRecordRead,
@@ -18,6 +20,8 @@ from app.schemas.vehicle import (
     VehicleReminderRead,
     VehicleReminderUpdate,
     VehicleStats,
+    VehicleTripCreate,
+    VehicleTripUpdate,
     VehicleUpdate,
 )
 
@@ -35,6 +39,8 @@ def _q2(value: Decimal) -> Decimal:
 
 def current_odometer(vehicle: Vehicle) -> int:
     readings = [r.odometer for r in vehicle.records if r.odometer is not None]
+    readings += [t.end_odometer for t in vehicle.trips]
+    readings += [i.odometer for i in vehicle.inspections if i.odometer is not None]
     return max([vehicle.initial_odometer, *readings])
 
 
@@ -103,6 +109,7 @@ def compute_stats(vehicle: Vehicle) -> VehicleStats:
     total_cost = sum(costs.values(), _ZERO)
     _, average = compute_consumption(vehicle.records)
     pending = [rem for rem in vehicle.reminders if not rem.is_done]
+    last_inspection = max(vehicle.inspections, key=lambda i: i.inspected_at, default=None)
     return VehicleStats(
         current_odometer=odometer,
         distance=distance,
@@ -115,6 +122,9 @@ def compute_stats(vehicle: Vehicle) -> VehicleStats:
         cost_per_km=_q2(total_cost / distance) if distance > 0 else None,
         pending_reminders=len(pending),
         overdue_reminders=sum(1 for rem in pending if reminder_is_overdue(rem, odometer)),
+        trip_count=len(vehicle.trips),
+        last_inspection_at=last_inspection.inspected_at if last_inspection else None,
+        last_inspection_has_issue=bool(last_inspection and last_inspection.has_issue),
     )
 
 
@@ -158,9 +168,12 @@ def reminders_to_read(vehicle: Vehicle) -> list[VehicleReminderRead]:
 def _with_children(stmt):
     # populate_existing: a vehicle already in the identity map (e.g. loaded
     # before a record was added) must get fresh collections, not stale ones.
-    return stmt.options(selectinload(Vehicle.records), selectinload(Vehicle.reminders)).execution_options(
-        populate_existing=True
-    )
+    return stmt.options(
+        selectinload(Vehicle.records),
+        selectinload(Vehicle.reminders),
+        selectinload(Vehicle.trips),
+        selectinload(Vehicle.inspections),
+    ).execution_options(populate_existing=True)
 
 
 async def get_vehicles(
@@ -183,7 +196,7 @@ async def get_vehicle(session: AsyncSession, vehicle_id: uuid.UUID, workspace_id
 
 async def _reload(session: AsyncSession, vehicle: Vehicle) -> Vehicle:
     await session.refresh(vehicle)
-    await session.refresh(vehicle, attribute_names=["records", "reminders"])
+    await session.refresh(vehicle, attribute_names=["records", "reminders", "trips", "inspections"])
     return vehicle
 
 
@@ -343,3 +356,88 @@ async def delete_reminder(
     await session.delete(reminder)
     await session.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Trips and inspections
+# ---------------------------------------------------------------------------
+# Same shape as reminders: children of a vehicle, scoped to the workspace,
+# looked up by (vehicle_id, child_id) so an id from another vehicle 404s.
+
+
+def trips_sorted(vehicle: Vehicle) -> list[VehicleTrip]:
+    return sorted(vehicle.trips, key=lambda t: (t.started_at, t.start_odometer), reverse=True)
+
+
+def inspections_sorted(vehicle: Vehicle) -> list[VehicleInspection]:
+    return sorted(vehicle.inspections, key=lambda i: i.inspected_at, reverse=True)
+
+
+async def _get_child(session: AsyncSession, model, vehicle_id: uuid.UUID, child_id: uuid.UUID, workspace_id: uuid.UUID):
+    result = await session.execute(
+        select(model).where(model.id == child_id, model.vehicle_id == vehicle_id, model.workspace_id == workspace_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_child(session: AsyncSession, model, vehicle_id: uuid.UUID, workspace_id: uuid.UUID, data):
+    vehicle = await get_vehicle(session, vehicle_id, workspace_id)
+    if not vehicle:
+        return None
+    child = model(vehicle_id=vehicle.id, workspace_id=workspace_id, **data.model_dump())
+    session.add(child)
+    await session.commit()
+    await session.refresh(child)
+    return child
+
+
+async def update_child(
+    session: AsyncSession, model, vehicle_id: uuid.UUID, child_id: uuid.UUID, workspace_id: uuid.UUID, data
+):
+    child = await _get_child(session, model, vehicle_id, child_id, workspace_id)
+    if not child:
+        return None
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(child, key, value)
+    if isinstance(child, VehicleTrip) and child.end_odometer < child.start_odometer:
+        raise ValueError("end_odometer must be greater than or equal to start_odometer")
+    await session.commit()
+    await session.refresh(child)
+    return child
+
+
+async def delete_child(
+    session: AsyncSession, model, vehicle_id: uuid.UUID, child_id: uuid.UUID, workspace_id: uuid.UUID
+) -> bool:
+    child = await _get_child(session, model, vehicle_id, child_id, workspace_id)
+    if not child:
+        return False
+    await session.delete(child)
+    await session.commit()
+    return True
+
+
+async def create_trip(session: AsyncSession, vehicle_id: uuid.UUID, workspace_id: uuid.UUID, data: VehicleTripCreate):
+    return await create_child(session, VehicleTrip, vehicle_id, workspace_id, data)
+
+
+async def update_trip(
+    session: AsyncSession, vehicle_id: uuid.UUID, trip_id: uuid.UUID, workspace_id: uuid.UUID, data: VehicleTripUpdate
+):
+    return await update_child(session, VehicleTrip, vehicle_id, trip_id, workspace_id, data)
+
+
+async def create_inspection(
+    session: AsyncSession, vehicle_id: uuid.UUID, workspace_id: uuid.UUID, data: VehicleInspectionCreate
+):
+    return await create_child(session, VehicleInspection, vehicle_id, workspace_id, data)
+
+
+async def update_inspection(
+    session: AsyncSession,
+    vehicle_id: uuid.UUID,
+    inspection_id: uuid.UUID,
+    workspace_id: uuid.UUID,
+    data: VehicleInspectionUpdate,
+):
+    return await update_child(session, VehicleInspection, vehicle_id, inspection_id, workspace_id, data)

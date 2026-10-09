@@ -39,7 +39,7 @@ from app.models.task import Task
 from app.models.transaction import Transaction
 from app.models.transaction_attachment import TransactionAttachment
 from app.models.transaction_split import TransactionSplit
-from app.models.vehicle import Vehicle, VehicleRecord, VehicleReminder
+from app.models.vehicle import Vehicle, VehicleInspection, VehicleRecord, VehicleReminder, VehicleTrip
 from app.models.workspace import Workspace, WorkspaceMember
 
 
@@ -70,6 +70,8 @@ _AUTOSTAMP_MODELS = (
     Vehicle,
     VehicleRecord,
     VehicleReminder,
+    VehicleTrip,
+    VehicleInspection,
 )
 
 

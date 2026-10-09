@@ -1424,7 +1424,10 @@
         "fuel": "Abastecimento",
         "maintenance": "Manutenção",
         "expense": "Outra despesa"
-      }
+      },
+      "driver": "Motorista",
+      "station": "Posto",
+      "place": "Local"
     },
     "reminders": {
       "add": "Novo lembrete",
@@ -1448,6 +1451,42 @@
         "oilChange": "Troca de óleo",
         "inspection": "Revisão"
       }
+    },
+    "tabTrips": "Percursos",
+    "tabInspections": "Inspeções",
+    "deleteRowConfirm": "Excluir este item?",
+    "trips": {
+      "empty": "Nenhum percurso ainda. Importe do Drivvo.",
+      "allDrivers": "Todos os motoristas",
+      "noPurpose": "Sem motivo"
+    },
+    "inspections": {
+      "empty": "Nenhuma inspeção ainda. Importe do Drivvo.",
+      "onlyIssues": "Só com problema",
+      "documents": "Documento",
+      "tires": "Pneus",
+      "coolant": "Radiador",
+      "failing": "Não funcionando",
+      "lastHasIssue": "Última inspeção com problema"
+    },
+    "import": {
+      "button": "Importar do Drivvo",
+      "title": "Importar do Drivvo",
+      "instructions": "Exporte seus dados do Drivvo (site: Relatórios → exportar CSV) e escolha o arquivo aqui. Você verá uma prévia antes de salvar. Importar o mesmo arquivo de novo só adiciona o que for novo.",
+      "chooseFile": "Escolher o arquivo CSV do Drivvo",
+      "preview": "Ver prévia",
+      "confirm": "Importar",
+      "invalidFile": "Este arquivo não parece uma exportação do Drivvo",
+      "vehiclesCreated": "Veículos novos",
+      "vehiclesMatched": "Veículos já cadastrados (os dados serão somados a eles)",
+      "records": "Abastecimentos, serviços e despesas",
+      "trips": "Percursos",
+      "inspections": "Inspeções diárias",
+      "new": "{{count}} novo(s)",
+      "alreadyHere": "{{count}} já importado(s)",
+      "nothingNew": "Tudo deste arquivo já foi importado.",
+      "warnings": "{{count}} linha(s) ignorada(s)",
+      "done": "{{count}} itens importados"
     }
   },
   "tasks": {

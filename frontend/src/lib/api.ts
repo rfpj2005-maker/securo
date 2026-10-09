@@ -44,8 +44,11 @@ import type {
   Task,
   Subtask,
   Vehicle,
+  VehicleImportResult,
+  VehicleInspection,
   VehicleRecord,
   VehicleReminder,
+  VehicleTrip,
   Meeting,
   MeetingListItem,
   GoogleCalendarStatus,
@@ -1058,7 +1061,10 @@ export type VehiclePayload = Partial<
   Pick<Vehicle, 'name' | 'plate' | 'brand' | 'model' | 'year' | 'color' | 'fuel_type' | 'initial_odometer' | 'notes' | 'is_active'>
 >
 export type VehicleRecordPayload = Partial<
-  Pick<VehicleRecord, 'kind' | 'date' | 'odometer' | 'amount' | 'liters' | 'full_tank' | 'description'>
+  Pick<
+    VehicleRecord,
+    'kind' | 'date' | 'odometer' | 'amount' | 'liters' | 'full_tank' | 'description' | 'driver' | 'place'
+  >
 >
 export type VehicleReminderPayload = Partial<Pick<VehicleReminder, 'title' | 'due_date' | 'due_odometer' | 'is_done'>>
 
@@ -1081,6 +1087,30 @@ export const vehicles = {
   },
   delete: async (id: string): Promise<void> => {
     await api.delete(`/vehicles/${id}`)
+  },
+  importDrivvo: async (file: File, dryRun: boolean): Promise<VehicleImportResult> => {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await api.post('/vehicles/import/drivvo', form, { params: { dry_run: dryRun } })
+    return data
+  },
+  trips: {
+    list: async (vehicleId: string): Promise<VehicleTrip[]> => {
+      const { data } = await api.get(`/vehicles/${vehicleId}/trips`)
+      return data
+    },
+    delete: async (vehicleId: string, tripId: string): Promise<void> => {
+      await api.delete(`/vehicles/${vehicleId}/trips/${tripId}`)
+    },
+  },
+  inspections: {
+    list: async (vehicleId: string): Promise<VehicleInspection[]> => {
+      const { data } = await api.get(`/vehicles/${vehicleId}/inspections`)
+      return data
+    },
+    delete: async (vehicleId: string, inspectionId: string): Promise<void> => {
+      await api.delete(`/vehicles/${vehicleId}/inspections/${inspectionId}`)
+    },
   },
   records: {
     list: async (vehicleId: string): Promise<VehicleRecord[]> => {

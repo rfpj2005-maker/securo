@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { VehicleFormDialog } from '@/components/vehicle-form-dialog'
+import { VehicleInspectionsTab, VehicleTripsTab } from '@/components/vehicle-trips-inspections'
 import { useWorkspace } from '@/contexts/workspace-context'
 import { useAuth } from '@/contexts/auth-context'
 import { useDateLocale, useDisplayLocale } from '@/hooks/use-display-locale'
@@ -231,6 +232,11 @@ export default function VehicleDetailPage() {
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <TabsList>
             <TabsTrigger value="records">{t('vehicles.tabRecords')}</TabsTrigger>
+            <TabsTrigger value="trips">{t('vehicles.tabTrips')}</TabsTrigger>
+            <TabsTrigger value="inspections">
+              {t('vehicles.tabInspections')}
+              {stats.last_inspection_has_issue && <AlertTriangle size={12} className="ml-1 text-rose-500" />}
+            </TabsTrigger>
             <TabsTrigger value="reminders">
               {t('vehicles.tabReminders')}
               {stats.overdue_reminders > 0 && (
@@ -275,6 +281,8 @@ export default function VehicleDetailPage() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs text-muted-foreground">
                           <span>{formatDate(record.date)}</span>
                           {record.odometer != null && <span>{t('vehicles.km', { value: number(record.odometer) })}</span>}
+                          {record.driver && <span>{record.driver}</span>}
+                          {record.place && <span>{record.place}</span>}
                           {record.liters && (
                             <span>
                               {number(record.liters, 2)} L
@@ -305,6 +313,14 @@ export default function VehicleDetailPage() {
               </TableBody>
             </Table>
           </div>
+        </TabsContent>
+
+        <TabsContent value="trips">
+          <VehicleTripsTab vehicleId={id} canWrite={canWrite} />
+        </TabsContent>
+
+        <TabsContent value="inspections">
+          <VehicleInspectionsTab vehicleId={id} canWrite={canWrite} />
         </TabsContent>
 
         <TabsContent value="reminders">
@@ -450,6 +466,8 @@ function RecordDialog({
   const [liters, setLiters] = useState('')
   const [fullTank, setFullTank] = useState(true)
   const [description, setDescription] = useState('')
+  const [driver, setDriver] = useState('')
+  const [place, setPlace] = useState('')
   const [lastOpen, setLastOpen] = useState(false)
 
   // Reset on the closed→open transition (render-time, no effect needed).
@@ -463,6 +481,8 @@ function RecordDialog({
       setLiters(record?.liters ? String(Number(record.liters)) : '')
       setFullTank(record?.full_tank ?? true)
       setDescription(record?.description ?? '')
+      setDriver(record?.driver ?? '')
+      setPlace(record?.place ?? '')
     }
   }
 
@@ -476,6 +496,8 @@ function RecordDialog({
       liters: isFuel && liters ? liters : null,
       full_tank: isFuel ? fullTank : false,
       description: description.trim() || null,
+      driver: driver.trim() || null,
+      place: place.trim() || null,
     })
   }
 
@@ -554,6 +576,16 @@ function RecordDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('vehicles.records.descriptionPlaceholder')}
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>{t('vehicles.records.driver')}</Label>
+              <Input value={driver} maxLength={100} onChange={(e) => setDriver(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>{isFuel ? t('vehicles.records.station') : t('vehicles.records.place')}</Label>
+              <Input value={place} maxLength={150} onChange={(e) => setPlace(e.target.value)} />
+            </div>
           </div>
         </div>
         <DialogFooter className={onDelete ? 'flex justify-between sm:justify-between' : ''}>

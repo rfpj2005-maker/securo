@@ -787,6 +787,9 @@ export interface VehicleStats {
   cost_per_km: string | null
   pending_reminders: number
   overdue_reminders: number
+  trip_count: number
+  last_inspection_at: string | null
+  last_inspection_has_issue: boolean
 }
 
 export interface Vehicle {
@@ -800,6 +803,9 @@ export interface Vehicle {
   color: string | null
   fuel_type: VehicleFuelType
   initial_odometer: number
+  tank_capacity: string | null
+  chassis: string | null
+  renavam: string | null
   notes: string | null
   is_active: boolean
   created_at: string
@@ -817,8 +823,55 @@ export interface VehicleRecord {
   liters: string | null
   full_tank: boolean
   description: string | null
+  driver: string | null
+  place: string | null
+  payment_method: string | null
+  purpose: string | null
+  notes: string | null
   consumption: string | null
   created_at: string
+}
+
+export interface VehicleTrip {
+  id: string
+  vehicle_id: string
+  started_at: string
+  ended_at: string | null
+  start_odometer: number
+  end_odometer: number
+  distance: number
+  origin: string | null
+  destination: string | null
+  driver: string | null
+  purpose: string | null
+  notes: string | null
+  created_at: string
+}
+
+export interface VehicleInspection {
+  id: string
+  vehicle_id: string
+  inspected_at: string
+  odometer: number | null
+  driver: string | null
+  documents_ok: boolean | null
+  tires_ok: boolean | null
+  coolant_checked: boolean | null
+  failing_items: string | null
+  other_problem: string | null
+  notes: string | null
+  has_issue: boolean
+  created_at: string
+}
+
+export interface VehicleImportResult {
+  dry_run: boolean
+  vehicles_created: string[]
+  vehicles_matched: string[]
+  records: { created: number; skipped: number }
+  trips: { created: number; skipped: number }
+  inspections: { created: number; skipped: number }
+  warnings: string[]
 }
 
 export interface VehicleReminder {

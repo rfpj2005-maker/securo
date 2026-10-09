@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/page-header'
 import { VehicleFormDialog } from '@/components/vehicle-form-dialog'
+import { VehicleImportDialog } from '@/components/vehicle-import-dialog'
 import { useWorkspace } from '@/contexts/workspace-context'
 import { useAuth } from '@/contexts/auth-context'
 import { useDisplayLocale } from '@/hooks/use-display-locale'
 import { usePrivacyMode } from '@/hooks/use-privacy-mode'
 import { formatCurrency } from '@/lib/format'
-import { AlertTriangle, BellRing, CarFront, Fuel, Gauge } from 'lucide-react'
+import { AlertTriangle, BellRing, CarFront, ClipboardCheck, FileUp, Fuel, Gauge } from 'lucide-react'
 import type { Vehicle } from '@/types'
 
 export default function VehiclesPage() {
@@ -26,6 +27,7 @@ export default function VehiclesPage() {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [showInactive, setShowInactive] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: allVehicles, isLoading } = useQuery({
     queryKey: ['vehicles'],
@@ -52,7 +54,17 @@ export default function VehiclesPage() {
       <PageHeader
         section={t('vehicles.section')}
         title={t('vehicles.title')}
-        action={canWrite ? <Button onClick={() => setDialogOpen(true)}>+ {t('vehicles.add')}</Button> : undefined}
+        action={
+          canWrite ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <FileUp size={16} className="mr-1.5" />
+                {t('vehicles.import.button')}
+              </Button>
+              <Button onClick={() => setDialogOpen(true)}>+ {t('vehicles.add')}</Button>
+            </div>
+          ) : undefined
+        }
       />
 
       {hasInactive && (
@@ -90,6 +102,8 @@ export default function VehiclesPage() {
           ))}
         </div>
       )}
+
+      <VehicleImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <VehicleFormDialog
         open={dialogOpen}
@@ -159,12 +173,18 @@ function VehicleCard({
         </div>
       </div>
 
-      {(stats.overdue_reminders > 0 || stats.pending_reminders > 0) && (
+      {(stats.overdue_reminders > 0 || stats.pending_reminders > 0 || stats.last_inspection_has_issue) && (
         <div className="flex flex-wrap gap-2 mt-4">
           {stats.overdue_reminders > 0 && (
             <span className="flex items-center gap-1 text-xs font-medium text-rose-600 bg-rose-500/10 px-2 py-0.5 rounded-full">
               <AlertTriangle size={12} />
               {t('vehicles.overdueCount', { count: stats.overdue_reminders })}
+            </span>
+          )}
+          {stats.last_inspection_has_issue && (
+            <span className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+              <ClipboardCheck size={12} />
+              {t('vehicles.inspections.lastHasIssue')}
             </span>
           )}
           {stats.pending_reminders - stats.overdue_reminders > 0 && (

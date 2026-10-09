@@ -1424,7 +1424,10 @@
         "fuel": "Fill-up",
         "maintenance": "Maintenance",
         "expense": "Other expense"
-      }
+      },
+      "driver": "Driver",
+      "station": "Gas station",
+      "place": "Place"
     },
     "reminders": {
       "add": "Add reminder",
@@ -1448,6 +1451,42 @@
         "oilChange": "Oil change",
         "inspection": "Inspection"
       }
+    },
+    "tabTrips": "Trips",
+    "tabInspections": "Inspections",
+    "deleteRowConfirm": "Delete this entry?",
+    "trips": {
+      "empty": "No trips yet. Import them from Drivvo.",
+      "allDrivers": "All drivers",
+      "noPurpose": "No reason"
+    },
+    "inspections": {
+      "empty": "No inspections yet. Import them from Drivvo.",
+      "onlyIssues": "Only with problems",
+      "documents": "Documents",
+      "tires": "Tyres",
+      "coolant": "Coolant",
+      "failing": "Not working",
+      "lastHasIssue": "Last inspection flagged a problem"
+    },
+    "import": {
+      "button": "Import from Drivvo",
+      "title": "Import from Drivvo",
+      "instructions": "Export your data from Drivvo (web: Reports → export CSV) and choose the file here. You will see a preview before anything is saved. Importing the same file again only adds what is new.",
+      "chooseFile": "Choose the Drivvo CSV file",
+      "preview": "Preview",
+      "confirm": "Import",
+      "invalidFile": "This does not look like a Drivvo export",
+      "vehiclesCreated": "New vehicles",
+      "vehiclesMatched": "Existing vehicles (data will be added to them)",
+      "records": "Fill-ups, services and expenses",
+      "trips": "Trips",
+      "inspections": "Daily inspections",
+      "new": "{{count}} new",
+      "alreadyHere": "{{count}} already here",
+      "nothingNew": "Everything in this file is already imported.",
+      "warnings": "{{count}} rows skipped",
+      "done": "{{count}} entries imported"
     }
   },
   "tasks": {

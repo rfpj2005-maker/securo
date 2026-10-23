@@ -1,0 +1,20 @@
+{
+  "_leia": "Lista padrão embutida no APK. Para trocar sem recompilar, publique um JSON igual numa URL (ex.: no ServidorCameras) e configure no app (botão Menu) ou via adb. 'gridUrl' é opcional: use o substream (mais leve) no mosaico e 'url' (principal) na tela cheia. 'tcp': true força RTSP sobre TCP.",
+  "rotateSeconds": 0,
+  "maxPerPage": 4,
+  "stores": [
+    {
+      "name": "Matriz",
+      "cameras": [
+        { "name": "PVAdmin", "url": "rtsp://192.168.18.107:8554/pvadmin" }
+      ]
+    },
+    {
+      "name": "Centro",
+      "cameras": [
+        { "name": "PVCentro01", "url": "rtsp://192.168.18.107:8554/centro_pvcentro01" },
+        { "name": "PVCentro03", "url": "rtsp://192.168.18.107:8554/centro_pvcentro03" }
+      ]
+    }
+  ]
+}

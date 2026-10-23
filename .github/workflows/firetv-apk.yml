@@ -1,0 +1,55 @@
+name: Fire TV APK
+
+on:
+  push:
+    paths:
+      - "firetv/**"
+      - ".github/workflows/firetv-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK (Câmeras Amparar)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firetv
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      # Assinatura fixa (opcional): sem ela cada build usa uma chave de debug
+      # diferente e a atualização exige desinstalar antes (o script faz isso).
+      - name: Restore signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.FIRETV_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "FIRETV_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build release APK
+        env:
+          FIRETV_KEYSTORE_PASSWORD: ${{ secrets.FIRETV_KEYSTORE_PASSWORD }}
+          FIRETV_KEY_ALIAS: ${{ secrets.FIRETV_KEY_ALIAS }}
+          FIRETV_KEY_PASSWORD: ${{ secrets.FIRETV_KEY_PASSWORD }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk "cameras-amparar-${GITHUB_RUN_NUMBER}.apk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cameras-amparar-apk
+          path: firetv/cameras-amparar-*.apk
+          retention-days: 30

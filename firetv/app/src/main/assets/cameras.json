@@ -1,19 +1,33 @@
 {
-  "_leia": "Lista padrão embutida no APK. Para trocar sem recompilar, publique um JSON igual numa URL (ex.: no ServidorCameras) e configure no app (botão Menu) ou via adb. 'gridUrl' é opcional: use o substream (mais leve) no mosaico e 'url' (principal) na tela cheia. 'tcp': true força RTSP sobre TCP.",
+  "_leia": "Cada item de 'stores' é uma tela do mosaico (até 4 câmeras). Para trocar sem recompilar, publique um JSON igual numa URL (ex.: no ServidorCameras) e configure no app (botão Menu) ou via adb. 'gridUrl' é opcional: use o substream (mais leve) no mosaico e 'url' (principal) na tela cheia. 'tcp': true força RTSP sobre TCP. Só pvadmin está confirmada; os outros paths seguem o padrão do relay e precisam ser conferidos.",
   "rotateSeconds": 0,
   "maxPerPage": 4,
   "stores": [
     {
       "name": "Matriz",
       "cameras": [
-        { "name": "PVAdmin", "url": "rtsp://192.168.18.107:8554/pvadmin" }
+        { "name": "PVRecep02", "url": "rtsp://192.168.18.107:8554/pvrecep02" },
+        { "name": "PVRecep01", "url": "rtsp://192.168.18.107:8554/pvrecep01" },
+        { "name": "PVAdmin", "url": "rtsp://192.168.18.107:8554/pvadmin" },
+        { "name": "PVComercial", "url": "rtsp://192.168.18.107:8554/pvcomercial" }
       ]
     },
     {
-      "name": "Centro",
+      "name": "Belvedere · Centro",
       "cameras": [
+        { "name": "PVBelve01", "url": "rtsp://192.168.18.107:8554/belvedere_pvbelve01" },
+        { "name": "PVBelve02", "url": "rtsp://192.168.18.107:8554/belvedere_pvbelve02" },
         { "name": "PVCentro01", "url": "rtsp://192.168.18.107:8554/centro_pvcentro01" },
-        { "name": "PVCentro03", "url": "rtsp://192.168.18.107:8554/centro_pvcentro03" }
+        { "name": "PVCentro02", "url": "rtsp://192.168.18.107:8554/centro_pvcentro02" }
+      ]
+    },
+    {
+      "name": "Pequi · Varginha",
+      "cameras": [
+        { "name": "PVPequi01", "url": "rtsp://192.168.18.107:8554/pequi_pvpequi01" },
+        { "name": "PVPequi02", "url": "rtsp://192.168.18.107:8554/pequi_pvpequi02" },
+        { "name": "PVVarg01", "url": "rtsp://192.168.18.107:8554/varginha_pvvarg01" },
+        { "name": "PVVarg02", "url": "rtsp://192.168.18.107:8554/varginha_pvvarg02" }
       ]
     }
   ]

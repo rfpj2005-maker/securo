@@ -161,7 +161,9 @@ class CameraTile(
     }
 
     private fun showStatus(message: String) {
-        status.text = message
+        // Mostra o path (nunca usuário/senha) para saber qual URL corrigir.
+        val path = android.net.Uri.parse(camera.url).path.orEmpty()
+        status.text = if (path.isEmpty()) message else "$message\n$path"
         status.visibility = View.VISIBLE
     }
 

@@ -23,7 +23,7 @@ plano nem nada além do vídeo.
 
 O app usa, nessa ordem: a URL configurada (guarda cópia para quando o
 servidor cair) → a última cópia → `app/src/main/assets/cameras.json`
-(embutido no APK).
+(embutido no APK, vazio de propósito).
 
 ```json
 {
@@ -31,7 +31,7 @@ servidor cair) → a última cópia → `app/src/main/assets/cameras.json`
   "maxPerPage": 4,
   "stores": [
     { "name": "Matriz", "cameras": [
-      { "name": "PVAdmin", "url": "rtsp://192.168.18.107:8554/pvadmin",
+      { "name": "PVAdmin", "url": "rtsp://SERVIDOR:8554/pvadmin",
         "gridUrl": "rtsp://.../pvadmin_sub", "tcp": false }
     ]}
   ]
@@ -43,8 +43,9 @@ servidor cair) → a última cópia → `app/src/main/assets/cameras.json`
   que mais deixa o app leve.
 - `tcp: true`: força RTSP sobre TCP (útil fora da LAN, via Tailscale).
 - `rotateSeconds` > 0: troca de loja sozinho depois de 1 min sem mexer.
-- Não coloque senha na lista embutida (vai para o repositório). Se o
-  MediaMTX pedir login, use a URL remota.
+- Cada item de `stores` é uma tela do mosaico.
+- **Não coloque endereços nem senhas na lista embutida**: este repositório é
+  público. A lista real fica só no servidor (URL remota).
 
 Configurar a URL pelo adb, sem digitar no controle:
 

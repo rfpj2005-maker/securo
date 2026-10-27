@@ -1,6 +1,6 @@
 {
   "_leia": "Lista embutida vazia de propósito: este repositório é público, então endereços de câmeras não ficam aqui. O app lê a lista real da URL configurada (Menu ≡ ou adb: am start -n br.com.amparar.cameras/.MainActivity --es configUrl http://SERVIDOR:4000/cameras.json) e guarda uma cópia para quando o servidor cair. Veja o formato no README.",
-  "rotateSeconds": 0,
+  "rotateSeconds": 10,
   "maxPerPage": 4,
   "stores": []
 }

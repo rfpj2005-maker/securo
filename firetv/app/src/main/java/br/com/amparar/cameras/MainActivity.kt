@@ -28,8 +28,8 @@ import kotlin.math.sqrt
 /**
  * Tela única do app: mosaico de câmeras por loja, tela cheia ao apertar OK.
  *
- * Controle remoto: ◀ ▶ nas bordas (ou ⏪ ⏩) troca de loja · OK amplia · Voltar retorna ·
- * Menu (≡) configura a URL da lista de câmeras.
+ * Controle remoto: ◀ ▶ nas bordas (ou ⏪ ⏩) troca de tela · OK amplia · Voltar retorna ·
+ * ⏯ liga/desliga a troca automática · Menu (≡) configura a URL e recarrega a lista.
  */
 class MainActivity : Activity() {
 
@@ -52,11 +52,12 @@ class MainActivity : Activity() {
     private val rotator = object : Runnable {
         override fun run() {
             val cfg = config ?: return
+            if (!CameraConfig.autoRotate(this@MainActivity)) return
             val idle = SystemClock.elapsedRealtime() - lastInputAt > IDLE_BEFORE_ROTATE_MS
-            if (cfg.rotateSeconds > 0 && fullscreenTile == null && idle && cfg.pages.size > 1) {
+            if (fullscreenTile == null && idle && cfg.pages.size > 1) {
                 showPage(pageIndex + 1)
             }
-            if (cfg.rotateSeconds > 0) handler.postDelayed(this, cfg.rotateSeconds * 1000L)
+            handler.postDelayed(this, cfg.rotateSeconds * 1000L)
         }
     }
 
@@ -135,8 +136,7 @@ class MainActivity : Activity() {
                 result.onSuccess { (cfg, source) ->
                     config = cfg
                     configSource = source
-                    handler.removeCallbacks(rotator)
-                    if (cfg.rotateSeconds > 0) handler.postDelayed(rotator, cfg.rotateSeconds * 1000L)
+                    restartRotator()
                     showPage(pageIndex)
                 }.onFailure {
                     releaseAll()
@@ -144,6 +144,25 @@ class MainActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun restartRotator() {
+        val cfg = config ?: return
+        handler.removeCallbacks(rotator)
+        if (CameraConfig.autoRotate(this)) handler.postDelayed(rotator, cfg.rotateSeconds * 1000L)
+    }
+
+    /** ⏯ liga/desliga a troca automática de tela; a escolha fica salva. */
+    private fun toggleAutoRotate() {
+        val on = !CameraConfig.autoRotate(this)
+        CameraConfig.setAutoRotate(this, on)
+        val seconds = config?.rotateSeconds ?: CameraConfig.DEFAULT_ROTATE_SECONDS
+        // Ao ligar, a primeira troca acontece já no próximo intervalo.
+        if (on) lastInputAt = 0
+        restartRotator()
+        updateHeader()
+        val msg = if (on) "Troca automática LIGADA (a cada $seconds s)" else "Troca automática DESLIGADA"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
     }
 
     private fun showPage(index: Int) {
@@ -214,7 +233,8 @@ class MainActivity : Activity() {
         if (pages.isEmpty()) return
         val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
         val title = fullscreenTile?.let { "${pages[pageIndex].title} · ${it.camera.name}" } ?: pages[pageIndex].title
-        header.text = "$title   ${pageIndex + 1}/${pages.size}   $time"
+        val auto = if (CameraConfig.autoRotate(this) && pages.size > 1) "   ⟳ auto" else ""
+        header.text = "$title   ${pageIndex + 1}/${pages.size}$auto   $time"
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -226,7 +246,8 @@ class MainActivity : Activity() {
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_DOWN -> { showPage(pageIndex + 1); return true }
             KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
             KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_UP -> { showPage(pageIndex - 1); return true }
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { loadConfig(); return true }
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY,
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> { toggleAutoRotate(); return true }
         }
         if (full != null) {
             when (keyCode) {
@@ -292,6 +313,7 @@ class MainActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val IDLE_BEFORE_ROTATE_MS = 60_000L
+        // Depois de mexer no controle, espera um pouco antes de voltar a girar.
+        private const val IDLE_BEFORE_ROTATE_MS = 20_000L
     }
 }

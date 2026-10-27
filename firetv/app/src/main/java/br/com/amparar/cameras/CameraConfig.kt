@@ -36,6 +36,8 @@ data class CameraConfig(
     companion object {
         private const val PREFS = "cameras"
         private const val KEY_URL = "config_url"
+        private const val KEY_AUTO_ROTATE = "auto_rotate"
+        const val DEFAULT_ROTATE_SECONDS = 10
         private const val CACHE_FILE = "cameras-cache.json"
 
         fun configUrl(context: Context): String =
@@ -43,6 +45,13 @@ data class CameraConfig(
 
         fun setConfigUrl(context: Context, url: String) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_URL, url.trim()).apply()
+        }
+
+        fun autoRotate(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_AUTO_ROTATE, true)
+
+        fun setAutoRotate(context: Context, on: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_AUTO_ROTATE, on).apply()
         }
 
         /**
@@ -104,7 +113,7 @@ data class CameraConfig(
             }.filter { it.cameras.isNotEmpty() }
             return CameraConfig(
                 stores = stores,
-                rotateSeconds = root.optInt("rotateSeconds", 0).coerceAtLeast(0),
+                rotateSeconds = root.optInt("rotateSeconds", 0).takeIf { it > 0 } ?: DEFAULT_ROTATE_SECONDS,
                 maxPerPage = root.optInt("maxPerPage", 4).coerceIn(1, 9),
             )
         }

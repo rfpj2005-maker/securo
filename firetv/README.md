@@ -4,7 +4,7 @@ App Android TV só para ver as câmeras: substitui o tinyCam Monitor e o
 Fully Kiosk (`wall.html`) no Fire TV. Não tem anúncio, serviço em segundo
 plano nem nada além do vídeo.
 
-- Mosaico por loja (até `maxPerPage` câmeras por tela, padrão 4).
+- Mosaico de até 4 câmeras por tela, com troca automática a cada 10 s (⏯ liga/desliga).
 - RTSP direto do MediaMTX, sem áudio e com buffer curto (atraso baixo).
 - Reconecta sozinho (2 s → 30 s) e reinicia a câmera que travar.
 - Abre sozinho quando o Fire TV liga. Fora da tela, solta todos os players.
@@ -16,7 +16,8 @@ plano nem nada além do vídeo.
 | ◀ ▶ na borda, ⏪ ⏩ | loja anterior / próxima |
 | OK | câmera em tela cheia (◀ ▶ troca de câmera) |
 | Voltar | sai da tela cheia (no mosaico, 2× para sair do app) |
-| ⏯ | recarrega a lista |
+| ⏯ | liga/desliga a troca automática de tela (fica salvo) |
+| Menu (≡) → Recarregar | recarrega a lista |
 | Menu (≡) | URL da lista de câmeras |
 
 ## Lista de câmeras
@@ -27,7 +28,7 @@ servidor cair) → a última cópia → `app/src/main/assets/cameras.json`
 
 ```json
 {
-  "rotateSeconds": 0,
+  "rotateSeconds": 10,
   "maxPerPage": 4,
   "stores": [
     { "name": "Matriz", "cameras": [
@@ -42,7 +43,7 @@ servidor cair) → a última cópia → `app/src/main/assets/cameras.json`
   O Fire TV tem poucos decodificadores, então o mosaico com substream é o
   que mais deixa o app leve.
 - `tcp: true`: força RTSP sobre TCP (útil fora da LAN, via Tailscale).
-- `rotateSeconds` > 0: troca de loja sozinho depois de 1 min sem mexer.
+- `rotateSeconds`: intervalo da troca automática de tela (padrão 10 s). Liga/desliga com ⏯; depois de mexer no controle, espera 20 s antes de voltar a girar. Não gira em tela cheia.
 - Cada item de `stores` é uma tela do mosaico.
 - **Não coloque endereços nem senhas na lista embutida**: este repositório é
   público. A lista real fica só no servidor (URL remota).
